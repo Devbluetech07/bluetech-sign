@@ -1,0 +1,1 @@
+export { tagsController } from './crudControllers';

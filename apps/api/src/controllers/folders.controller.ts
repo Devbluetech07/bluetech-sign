@@ -1,0 +1,1 @@
+export { foldersController } from './crudControllers';
