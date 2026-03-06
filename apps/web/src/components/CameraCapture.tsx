@@ -30,7 +30,7 @@ export default function CameraCapture({
       setLoadingCamera(true);
       const media = await startCamera();
       if (!media) {
-        toast.error('Nao foi possivel acessar a camera. Use upload de imagem.');
+        toast.error('Não foi possível acessar a câmera. Use upload de imagem.');
       }
       setLoadingCamera(false);
     };

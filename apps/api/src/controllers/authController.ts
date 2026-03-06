@@ -13,7 +13,8 @@ export const authController = {
       if (!email || !password) return res.status(400).json({ error: 'Email e senha são obrigatórios' });
 
       const result = await query(
-        `SELECT u.*, o.name as org_name, o.brand_primary_color, o.logo_url
+        `SELECT u.*, o.name as org_name, o.brand_primary_color, o.brand_secondary_color,
+         o.brand_accent_color, o.logo_url, o.platform_name, o.visual_preset
          FROM users u JOIN organizations o ON o.id = u.organization_id
          WHERE u.email = $1 AND u.status = 'active'`, [email.toLowerCase()]
       );
@@ -34,8 +35,10 @@ export const authController = {
         user: {
           id: user.id, organization_id: user.organization_id, name: user.name, email: user.email,
           cpf: user.cpf, phone: user.phone, avatar_url: user.avatar_url, role: user.role,
-          permissions: user.permissions, org_name: user.org_name, brand_primary_color: user.brand_primary_color,
-          logo_url: user.logo_url,
+          permissions: user.permissions, org_name: user.org_name,
+          brand_primary_color: user.brand_primary_color, brand_secondary_color: user.brand_secondary_color,
+          brand_accent_color: user.brand_accent_color, logo_url: user.logo_url,
+          platform_name: user.platform_name, visual_preset: user.visual_preset,
         },
       });
     } catch (error: any) {
@@ -61,8 +64,8 @@ export const authController = {
       );
 
       const userResult = await query(
-        `INSERT INTO users (organization_id, name, email, password_hash, cpf, phone, role, status, email_verified, permissions)
-         VALUES ($1, $2, $3, $4, $5, $6, 'admin', 'active', true, $7) RETURNING *`,
+        `INSERT INTO users (org_id, organization_id, name, email, password_hash, cpf, phone, role, status, email_verified, permissions)
+         VALUES ($1, $1, $2, $3, $4, $5, $6, 'admin', 'active', true, $7) RETURNING *`,
         [orgResult.rows[0].id, name, email.toLowerCase(), password_hash, cpf, phone,
          JSON.stringify({ documents: true, templates: true, contacts: true, reports: true, settings: true, api_keys: true })]
       );
@@ -80,7 +83,9 @@ export const authController = {
   async me(req: AuthRequest, res: Response) {
     try {
       const result = await query(
-        `SELECT u.*, o.name as org_name, o.brand_primary_color, o.brand_secondary_color, o.logo_url, o.plan, o.max_documents_month, o.documents_used_month
+        `SELECT u.*, o.name as org_name, o.brand_primary_color, o.brand_secondary_color,
+         o.brand_accent_color, o.logo_url, o.plan, o.max_documents_month, o.documents_used_month,
+         o.platform_name, o.visual_preset, o.max_users
          FROM users u JOIN organizations o ON o.id = u.organization_id WHERE u.id = $1`, [req.user!.id]
       );
       if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
@@ -110,6 +115,7 @@ export const authController = {
     try {
       const { current_password, new_password } = req.body;
       const result = await query('SELECT password_hash FROM users WHERE id = $1', [req.user!.id]);
+      if (result.rows.length === 0) return res.status(404).json({ error: 'Usuário não encontrado' });
       const valid = await bcrypt.compare(current_password, result.rows[0].password_hash);
       if (!valid) return res.status(400).json({ error: 'Senha atual incorreta' });
 

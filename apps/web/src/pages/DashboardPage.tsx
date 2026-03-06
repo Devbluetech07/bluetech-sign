@@ -34,38 +34,36 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 sm:mb-8">
+    <div className="animate-fade-in page-shell">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 mt-1">Visão geral do sistema de assinatura</p>
+          <h1 className="section-title">Dashboard</h1>
+          <p className="section-subtitle">Visão geral do sistema de assinatura</p>
         </div>
         <Link to="/documents/new" className="btn-primary inline-flex items-center justify-center gap-2 w-full sm:w-auto">
           <Plus className="w-4 h-4" /> Novo Documento
         </Link>
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 mb-8">
         {cards.map((c, i) => (
-          <div key={i} className={`bg-gradient-to-br ${c.color} rounded-xl p-4 text-white shadow-lg`}>
+          <div key={i} className={`card-stat bg-gradient-to-br ${c.color}`}>
             <c.icon className="w-6 h-6 mb-2 opacity-80" />
-            <p className="text-2xl font-bold">{c.value}</p>
+            <p className="text-3xl font-extrabold tracking-tight">{c.value}</p>
             <p className="text-sm opacity-80 mt-0.5">{c.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Recent Documents */}
-      <div className="card p-6">
-        <div className="flex items-center justify-between mb-4 gap-3">
-          <h2 className="text-lg font-semibold text-gray-900">Documentos Recentes</h2>
+      <div className="table-container">
+        <div className="flex items-center justify-between p-5 pb-0 gap-3">
+          <h2 className="card-section-title mb-0">Documentos Recentes</h2>
           <Link to="/documents" className="text-brand-600 hover:text-brand-700 text-sm font-medium flex items-center gap-1">
             Ver todos <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
 
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 p-4 md:hidden">
           {(data?.recent_documents || []).map((doc: any) => {
             const sc = statusConfig[doc.status] || statusConfig.draft;
             const Icon = sc.icon;
@@ -81,18 +79,23 @@ export default function DashboardPage() {
             );
           })}
           {(!data?.recent_documents || data.recent_documents.length === 0) && (
-            <div className="py-10 text-center text-gray-400">Nenhum documento ainda. Crie o primeiro!</div>
+            <div className="empty-state">
+              <FileText className="empty-state-icon" />
+              <p className="empty-state-title">Nenhum documento ainda</p>
+              <p className="empty-state-text">Crie seu primeiro documento para começar</p>
+              <Link to="/documents/new" className="btn-primary inline-flex items-center gap-2"><Plus className="w-4 h-4" /> Criar Documento</Link>
+            </div>
           )}
         </div>
 
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[640px]">
+          <table className="min-w-[640px]">
             <thead>
-              <tr className="border-b border-gray-100">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Documento</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Status</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Signatários</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Data</th>
+              <tr>
+                <th>Documento</th>
+                <th>Status</th>
+                <th>Signatários</th>
+                <th>Data</th>
               </tr>
             </thead>
             <tbody>
@@ -100,7 +103,7 @@ export default function DashboardPage() {
                 const sc = statusConfig[doc.status] || statusConfig.draft;
                 const Icon = sc.icon;
                 return (
-                  <tr key={doc.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                  <tr key={doc.id}>
                     <td className="py-3 px-4">
                       <Link to={`/documents/${doc.id}`} className="text-sm font-medium text-gray-900 hover:text-brand-600 transition-colors">{doc.name}</Link>
                     </td>

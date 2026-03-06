@@ -79,14 +79,18 @@ export default function ReportsPage() {
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Relatórios</h1>
-      <p className="text-gray-500 text-sm mb-6">Análise e auditoria do sistema</p>
+    <div className="animate-fade-in page-shell">
+      <div className="page-header">
+        <div>
+          <h1 className="section-title">Relatórios</h1>
+          <p className="section-subtitle">Análise e auditoria do sistema</p>
+        </div>
+      </div>
 
-      <div className="card p-4 mb-6">
+      <div className="filter-bar">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Período</label>
+            <label className="form-label">Período</label>
             <select value={period} onChange={(e) => setPeriod(e.target.value)} className="input-field">
               <option value="7d">Últimos 7 dias</option>
               <option value="30d">Últimos 30 dias</option>
@@ -94,7 +98,7 @@ export default function ReportsPage() {
             </select>
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-600 mb-1 block">Status</label>
+            <label className="form-label">Status</label>
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-field">
               <option value="all">Todos</option>
               {Object.entries(STATUS_MAP).map(([key, value]) => (
@@ -121,7 +125,7 @@ export default function ReportsPage() {
         <div className="space-y-6">
           {/* Status chart */}
           <div className="card p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Documentos por Status</h3>
+            <h3 className="card-section-title">Documentos por Status</h3>
             {filteredStatusData.length === 0 ? (
               <p className="text-gray-400 text-center py-8">Sem dados no período</p>
             ) : (
@@ -147,7 +151,7 @@ export default function ReportsPage() {
 
           {/* Timeline */}
           <div className="card p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Assinaturas nos Últimos 30 Dias</h3>
+            <h3 className="card-section-title">Assinaturas nos Últimos 30 Dias</h3>
             {timelineData.length === 0 ? (
               <p className="text-gray-400 text-center py-8">Sem assinaturas no período</p>
             ) : (
@@ -170,7 +174,7 @@ export default function ReportsPage() {
       )}
 
       {tab === 'audit' && (
-        <div className="card overflow-hidden">
+        <div className="table-container">
           <div className="space-y-3 p-4 md:hidden">
             {auditData.map((log: any) => (
               <div key={log.id} className="border border-gray-100 rounded-xl p-3">
@@ -185,16 +189,16 @@ export default function ReportsPage() {
             {auditData.length === 0 && <div className="py-10 text-center text-gray-400">Nenhum log encontrado</div>}
           </div>
 
-          <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[900px]">
+          <div className="hidden md:block mobile-table-scroll">
+          <table className="min-w-[900px]">
             <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Data</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Ação</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Documento</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Usuário</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Descrição</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">IP</th>
+              <tr>
+                <th>Data</th>
+                <th>Ação</th>
+                <th className="hidden md:table-cell">Documento</th>
+                <th className="hidden md:table-cell">Usuário</th>
+                <th className="hidden lg:table-cell">Descrição</th>
+                <th className="hidden lg:table-cell">IP</th>
               </tr>
             </thead>
             <tbody>
@@ -216,7 +220,7 @@ export default function ReportsPage() {
       )}
 
       {tab === 'notifications' && (
-        <div className="card overflow-hidden">
+        <div className="table-container">
           <div className="space-y-3 p-4 md:hidden">
             {notifData.map((n: any) => (
               <div key={n.id} className="border border-gray-100 rounded-xl p-3">
@@ -232,15 +236,15 @@ export default function ReportsPage() {
             {notifData.length === 0 && <div className="py-10 text-center text-gray-400">Nenhuma notificação</div>}
           </div>
 
-          <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[760px]">
+          <div className="hidden md:block mobile-table-scroll">
+          <table className="min-w-[760px]">
             <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Data</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Tipo</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Destinatário</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Assunto</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Status</th>
+              <tr>
+                <th>Data</th>
+                <th>Tipo</th>
+                <th>Destinatário</th>
+                <th className="hidden md:table-cell">Assunto</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>

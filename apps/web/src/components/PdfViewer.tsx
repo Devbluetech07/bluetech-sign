@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { DocumentField, FieldType } from '../types/documentBuilder';
 
@@ -18,6 +18,7 @@ interface PdfViewerProps {
   activeSignerId: string | null;
   editable: boolean;
   currentPage: number;
+  totalPages: number;
   onPageChange?: (page: number) => void;
   selectedFieldId?: string | null;
   onSelectedFieldChange?: (fieldId: string | null) => void;
@@ -25,29 +26,9 @@ interface PdfViewerProps {
 }
 
 type DragState =
-  | {
-      kind: 'create';
-      startX: number;
-      startY: number;
-      currentX: number;
-      currentY: number;
-    }
-  | {
-      kind: 'move';
-      fieldId: string;
-      startX: number;
-      startY: number;
-      originX: number;
-      originY: number;
-    }
-  | {
-      kind: 'resize';
-      fieldId: string;
-      startX: number;
-      startY: number;
-      originW: number;
-      originH: number;
-    };
+  | { kind: 'create'; startX: number; startY: number; currentX: number; currentY: number }
+  | { kind: 'move'; fieldId: string; startX: number; startY: number; originX: number; originY: number }
+  | { kind: 'resize'; fieldId: string; startX: number; startY: number; originW: number; originH: number };
 
 const SIGNER_COLORS = [
   'border-brand-600 bg-brand-50/80 text-brand-800',
@@ -57,23 +38,21 @@ const SIGNER_COLORS = [
   'border-cyan-500 bg-cyan-50/80 text-cyan-800',
 ];
 
+const FIELD_LABELS: Record<string, string> = {
+  text: 'Texto', signature: 'Assinatura', initial: 'Rubrica', date: 'Data',
+  number: 'Número', image: 'Imagem', checkbox: 'Caixa', multiple: 'Múltiplo',
+  file: 'Arquivo', radio: 'Rádio', select: 'Selecionar', cells: 'Células', stamp: 'Carimbo',
+};
+
 export default function PdfViewer({
-  url,
-  fields,
-  signers,
-  onFieldAdd,
-  onFieldUpdate,
-  onFieldDelete,
-  activeSignerId,
-  editable,
-  currentPage,
-  onPageChange,
-  selectedFieldId,
-  onSelectedFieldChange,
-  pendingFieldType,
+  url, fields, signers, onFieldAdd, onFieldUpdate, onFieldDelete,
+  activeSignerId, editable, currentPage, totalPages, onPageChange,
+  selectedFieldId, onSelectedFieldChange, pendingFieldType,
 }: PdfViewerProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
+
+  const isPlacingField = !!pendingFieldType && !!activeSignerId;
 
   const signerColorMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -84,53 +63,37 @@ export default function PdfViewer({
     return map;
   }, [signers]);
 
-  const pageFields = useMemo(() => fields.filter((field) => field.page === currentPage), [fields, currentPage]);
+  const pageFields = useMemo(() => fields.filter((f) => f.page === currentPage), [fields, currentPage]);
 
-  const getPercentCoords = (clientX: number, clientY: number) => {
+  const getPercentCoords = useCallback((clientX: number, clientY: number) => {
     if (!overlayRef.current) return { x: 0, y: 0 };
     const rect = overlayRef.current.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * 100;
-    const y = ((clientY - rect.top) / rect.height) * 100;
     return {
-      x: Math.max(0, Math.min(100, x)),
-      y: Math.max(0, Math.min(100, y)),
+      x: Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100)),
+      y: Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100)),
     };
+  }, []);
+
+  const startCreate = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!editable || !isPlacingField) return;
+    const pt = getPercentCoords(e.clientX, e.clientY);
+    setDrag({ kind: 'create', startX: pt.x, startY: pt.y, currentX: pt.x, currentY: pt.y });
   };
 
-  const startCreate = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (!editable || !pendingFieldType || !activeSignerId) return;
-    const point = getPercentCoords(event.clientX, event.clientY);
-    setDrag({
-      kind: 'create',
-      startX: point.x,
-      startY: point.y,
-      currentX: point.x,
-      currentY: point.y,
-    });
-  };
-
-  const onMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+  const onMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!drag) return;
-    const point = getPercentCoords(event.clientX, event.clientY);
+    const pt = getPercentCoords(e.clientX, e.clientY);
     if (drag.kind === 'create') {
-      setDrag({ ...drag, currentX: point.x, currentY: point.y });
-      return;
-    }
-    if (drag.kind === 'move') {
-      const deltaX = point.x - drag.startX;
-      const deltaY = point.y - drag.startY;
+      setDrag({ ...drag, currentX: pt.x, currentY: pt.y });
+    } else if (drag.kind === 'move') {
       onFieldUpdate(drag.fieldId, {
-        x: Math.max(0, Math.min(100, drag.originX + deltaX)),
-        y: Math.max(0, Math.min(100, drag.originY + deltaY)),
+        x: Math.max(0, Math.min(100, drag.originX + pt.x - drag.startX)),
+        y: Math.max(0, Math.min(100, drag.originY + pt.y - drag.startY)),
       });
-      return;
-    }
-    if (drag.kind === 'resize') {
-      const deltaX = point.x - drag.startX;
-      const deltaY = point.y - drag.startY;
+    } else if (drag.kind === 'resize') {
       onFieldUpdate(drag.fieldId, {
-        width: Math.max(3, Math.min(100, drag.originW + deltaX)),
-        height: Math.max(2, Math.min(100, drag.originH + deltaY)),
+        width: Math.max(3, Math.min(100, drag.originW + pt.x - drag.startX)),
+        height: Math.max(2, Math.min(100, drag.originH + pt.y - drag.startY)),
       });
     }
   };
@@ -138,17 +101,17 @@ export default function PdfViewer({
   const onMouseUp = () => {
     if (!drag) return;
     if (drag.kind === 'create') {
-      const width = Math.abs(drag.currentX - drag.startX);
-      const height = Math.abs(drag.currentY - drag.startY);
-      if (width > 1 && height > 1 && pendingFieldType && activeSignerId) {
+      const w = Math.abs(drag.currentX - drag.startX);
+      const h = Math.abs(drag.currentY - drag.startY);
+      if (w > 1 && h > 1 && pendingFieldType && activeSignerId) {
         onFieldAdd({
           field_type: pendingFieldType,
           signer_id: activeSignerId,
           page: currentPage,
           x: Math.min(drag.startX, drag.currentX),
           y: Math.min(drag.startY, drag.currentY),
-          width,
-          height,
+          width: w,
+          height: h,
           required: true,
         });
       }
@@ -156,39 +119,31 @@ export default function PdfViewer({
     setDrag(null);
   };
 
+  const pdfUrlWithPage = `${url}#page=${currentPage}`;
+
   return (
     <div className="w-full h-full flex flex-col gap-3">
-      <div className="flex gap-2 overflow-x-auto">
-        {Array.from({ length: Math.max(1, currentPage + 2) }).map((_, idx) => {
-          const page = idx + 1;
-          return (
-            <button
-              key={page}
-              onClick={() => onPageChange?.(page)}
-              className={`min-h-11 min-w-11 px-3 rounded-lg border text-sm ${
-                currentPage === page ? 'border-brand-600 text-brand-700 bg-brand-50' : 'border-gray-200 text-gray-500'
-              }`}
-            >
-              {page}
-            </button>
-          );
-        })}
-      </div>
+      {/* PDF container */}
+      <div className="relative flex-1 min-h-[600px] bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 shadow-inner">
+        {/* PDF iframe - always interactive for scroll/zoom */}
+        <iframe src={pdfUrlWithPage} title="PDF" className="absolute inset-0 w-full h-full" />
 
-      <div className="relative flex-1 min-h-[520px] bg-gray-100 rounded-2xl overflow-hidden border border-gray-200">
-        <iframe src={url} title="PDF" className="absolute inset-0 w-full h-full" />
-        <embed src={url} type="application/pdf" className="absolute inset-0 w-full h-full pointer-events-none opacity-0" />
-
+        {/* Overlay - only intercepts pointer when placing a field */}
         <div
           ref={overlayRef}
-          className={`absolute inset-0 ${editable ? 'cursor-crosshair' : 'cursor-default'}`}
+          className={`absolute inset-0 ${
+            isPlacingField
+              ? 'cursor-crosshair bg-brand-500/5'
+              : 'pointer-events-none'
+          }`}
           onMouseDown={startCreate}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
         >
+          {/* Existing fields are always interactive */}
           {pageFields.map((field) => {
-            const signer = signers.find((item) => item.id === field.signer_id || item.temp_id === field.signer_id);
+            const signer = signers.find((s) => s.id === field.signer_id || s.temp_id === field.signer_id);
             const signerKey = field.signer_id || signer?.id || signer?.temp_id || '';
             const colorClass = signerColorMap[signerKey] || SIGNER_COLORS[0];
             const isSelected = selectedFieldId === field.id;
@@ -196,60 +151,41 @@ export default function PdfViewer({
             return (
               <div
                 key={field.id}
-                className={`absolute border-2 border-dashed rounded-md p-1 ${colorClass} ${
-                  isSelected ? 'border-solid ring-2 ring-brand-200' : ''
-                }`}
+                className={`absolute border-2 border-dashed rounded-md p-1 pointer-events-auto ${colorClass} ${
+                  isSelected ? 'border-solid ring-2 ring-brand-300 shadow-lg' : ''
+                } ${editable ? 'cursor-move hover:shadow-md' : ''}`}
                 style={{
-                  left: `${field.x}%`,
-                  top: `${field.y}%`,
-                  width: `${field.width}%`,
-                  height: `${field.height}%`,
+                  left: `${field.x}%`, top: `${field.y}%`,
+                  width: `${field.width}%`, height: `${field.height}%`,
                 }}
-                onMouseDown={(event) => {
-                  event.stopPropagation();
+                onMouseDown={(e) => {
+                  e.stopPropagation();
                   onSelectedFieldChange?.(field.id);
                   if (!editable) return;
-                  const point = getPercentCoords(event.clientX, event.clientY);
-                  setDrag({
-                    kind: 'move',
-                    fieldId: field.id,
-                    startX: point.x,
-                    startY: point.y,
-                    originX: field.x,
-                    originY: field.y,
-                  });
+                  const pt = getPercentCoords(e.clientX, e.clientY);
+                  setDrag({ kind: 'move', fieldId: field.id, startX: pt.x, startY: pt.y, originX: field.x, originY: field.y });
                 }}
               >
                 <div className="flex items-center justify-between gap-1">
                   <span className="text-[10px] font-semibold truncate">
-                    {field.field_type} - {signer?.name || 'Sem signatario'}
+                    {FIELD_LABELS[field.field_type] || field.field_type} - {signer?.name || '?'}
                   </span>
                   {editable && (
                     <button
                       className="min-h-5 min-w-5 inline-flex items-center justify-center rounded hover:bg-white/80"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onFieldDelete(field.id);
-                      }}
+                      onClick={(e) => { e.stopPropagation(); onFieldDelete(field.id); }}
                     >
                       <X className="w-3 h-3" />
                     </button>
                   )}
                 </div>
                 {editable && (
-                  <button
-                    className="absolute bottom-0 right-0 w-3 h-3 bg-white border border-gray-300 rounded-sm"
-                    onMouseDown={(event) => {
-                      event.stopPropagation();
-                      const point = getPercentCoords(event.clientX, event.clientY);
-                      setDrag({
-                        kind: 'resize',
-                        fieldId: field.id,
-                        startX: point.x,
-                        startY: point.y,
-                        originW: field.width,
-                        originH: field.height,
-                      });
+                  <div
+                    className="absolute bottom-0 right-0 w-3 h-3 bg-white border border-gray-300 rounded-sm cursor-se-resize"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      const pt = getPercentCoords(e.clientX, e.clientY);
+                      setDrag({ kind: 'resize', fieldId: field.id, startX: pt.x, startY: pt.y, originW: field.width, originH: field.height });
                     }}
                   />
                 )}
@@ -257,9 +193,10 @@ export default function PdfViewer({
             );
           })}
 
+          {/* Creation preview rect */}
           {drag?.kind === 'create' && (
             <div
-              className="absolute border-2 border-brand-600 border-dashed bg-brand-100/30 rounded-md"
+              className="absolute border-2 border-brand-600 border-dashed bg-brand-100/30 rounded-md pointer-events-none"
               style={{
                 left: `${Math.min(drag.startX, drag.currentX)}%`,
                 top: `${Math.min(drag.startY, drag.currentY)}%`,
@@ -269,6 +206,13 @@ export default function PdfViewer({
             />
           )}
         </div>
+
+        {/* Placing hint banner */}
+        {isPlacingField && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 bg-brand-600 text-white text-xs font-medium px-4 py-2 rounded-full shadow-lg pointer-events-none z-10 animate-pulse">
+            Clique e arraste para posicionar o campo
+          </div>
+        )}
       </div>
     </div>
   );

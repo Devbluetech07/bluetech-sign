@@ -13,7 +13,7 @@ const app = express();
 const PORT = env.port;
 
 // Middleware
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" }, contentSecurityPolicy: false, frameguard: false }));
 app.use(cors({
   origin: env.urls.frontend,
   credentials: true,
@@ -32,6 +32,27 @@ const limiter = rateLimit({
   message: { error: 'Muitas requisições. Tente novamente em alguns minutos.' },
 });
 app.use('/api/', limiter);
+
+// File proxy for MinIO (presigned URLs point to internal hostname)
+app.get('/api/files/*', async (req, res) => {
+  try {
+    const { getFileBuffer } = await import('./config/minio');
+    const key = req.params[0];
+    if (!key) return res.status(400).json({ error: 'File key is required' });
+    const buffer = await getFileBuffer(key);
+    const ext = key.split('.').pop()?.toLowerCase() || '';
+    const contentTypes: Record<string, string> = {
+      pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+      webp: 'image/webp', svg: 'image/svg+xml', doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    };
+    res.setHeader('Content-Type', contentTypes[ext] || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(buffer);
+  } catch (e: any) {
+    res.status(404).json({ error: 'File not found' });
+  }
+});
 
 // Routes
 app.use('/api', routes);

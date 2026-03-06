@@ -44,11 +44,11 @@ export default function FoldersPage() {
   };
 
   return (
-    <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div className="animate-fade-in page-shell">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Pastas</h1>
-          <p className="text-gray-500 text-sm mt-1">Organize seus documentos em pastas</p>
+          <h1 className="section-title">Pastas</h1>
+          <p className="section-subtitle">Organize seus documentos em pastas</p>
         </div>
         <button onClick={() => { setEditId(null); setForm({ name: '', color: '#1E40AF', description: '' }); setShowModal(true); }} className="btn-primary w-full sm:w-auto inline-flex items-center justify-center gap-2">
           <Plus className="w-4 h-4" /> Nova Pasta
@@ -58,14 +58,15 @@ export default function FoldersPage() {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
       ) : folders.length === 0 ? (
-        <div className="card p-12 text-center">
-          <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">Nenhuma pasta criada</p>
+        <div className="card empty-state">
+          <FolderOpen className="empty-state-icon" />
+          <p className="empty-state-title">Nenhuma pasta criada</p>
+          <p className="empty-state-text">Organize seus documentos criando pastas</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {folders.map(f => (
-            <div key={f.id} className="card p-5 hover:border-brand-200 transition-all group cursor-pointer">
+            <div key={f.id} className="card-glass p-5 hover:border-brand-200 transition-all group cursor-pointer">
               <div className="flex items-start justify-between mb-3">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${COLOR_CLASSES[f.color]?.iconBg || 'bg-brand-100'}`}>
                   <FolderOpen className={`w-5 h-5 ${COLOR_CLASSES[f.color]?.iconText || 'text-brand-700'}`} />
@@ -86,10 +87,10 @@ export default function FoldersPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-slide-in" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-gray-900">{editId ? 'Editar Pasta' : 'Nova Pasta'}</h3>
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-panel max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">{editId ? 'Editar Pasta' : 'Nova Pasta'}</h3>
               <button onClick={() => setShowModal(false)} className="min-h-11 min-w-11 inline-flex items-center justify-center hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4">

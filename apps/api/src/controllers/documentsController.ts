@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
+import { PDFDocument } from 'pdf-lib';
 import { query } from '../config/database';
 import { uploadFile, getFileUrl, deleteFile, getFileBuffer } from '../config/minio';
 import { AuthRequest } from '../middleware/auth';
@@ -86,16 +87,25 @@ export const documentsController = {
 
       const file = req.file;
       const fileHash = crypto.createHash('sha256').update(file.buffer).digest('hex');
-      const ext = file.originalname.split('.').pop();
+      const ext = file.originalname.split('.').pop()?.toLowerCase();
       const key = `documents/${req.user!.organization_id}/${uuidv4()}.${ext}`;
+
+      let filePages = 1;
+      if (ext === 'pdf') {
+        try {
+          const pdfDoc = await PDFDocument.load(file.buffer, { ignoreEncryption: true });
+          filePages = pdfDoc.getPageCount();
+        } catch { /* keep default 1 */ }
+      }
 
       await uploadFile(key, file.buffer, file.mimetype, { 'original-name': file.originalname, 'uploaded-by': req.user!.id });
 
+      const docName = req.body.name || file.originalname.replace(`.${ext}`, '');
       const result = await query(
-        `INSERT INTO documents (organization_id, name, file_key, file_name, file_size, file_type, file_hash, folder_id, created_by, status)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'draft') RETURNING *`,
-        [req.user!.organization_id, req.body.name || file.originalname.replace(`.${ext}`, ''),
-         key, file.originalname, file.size, file.mimetype, fileHash, req.body.folder_id || null, req.user!.id]
+        `INSERT INTO documents (organization_id, name, title, file_key, file_name, file_size, file_type, file_hash, file_pages, folder_id, created_by, status)
+         VALUES ($1, $2, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'draft') RETURNING *`,
+        [req.user!.organization_id, docName,
+         key, file.originalname, file.size, file.mimetype, fileHash, filePages, req.body.folder_id || null, req.user!.id]
       );
 
       await createAuditLog({ organization_id: req.user!.organization_id, document_id: result.rows[0].id,
@@ -106,6 +116,7 @@ export const documentsController = {
       doc.file_url = await getFileUrl(key);
       res.status(201).json(doc);
     } catch (error: any) {
+      console.error('Upload error:', error);
       res.status(500).json({ error: 'Erro ao fazer upload', details: error.message });
     }
   },

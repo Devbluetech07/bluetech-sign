@@ -34,7 +34,7 @@ export function useCamera(facingMode: FacingMode = 'user') {
     } catch (err) {
       setIsActive(false);
       setHasPermission(false);
-      setError(err instanceof Error ? err.message : 'Nao foi possivel acessar a camera');
+      setError(err instanceof Error ? err.message : 'Não foi possível acessar a câmera');
       return null;
     }
   }, [facingMode]);

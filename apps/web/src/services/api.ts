@@ -117,12 +117,6 @@ export const settingsAPI = {
   revokeApiKey: (id: string) => api.delete(`/settings/api-keys/${id}`),
 };
 
-export const apiKeysAPI = {
-  list: () => api.get('/settings/api-keys'),
-  create: (data: { name: string; scopes: string[] }) => api.post('/settings/api-keys', data),
-  revoke: (id: string) => api.delete(`/settings/api-keys/${id}`),
-};
-
 // Webhooks
 export const webhooksAPI = {
   list: () => api.get('/webhooks'),

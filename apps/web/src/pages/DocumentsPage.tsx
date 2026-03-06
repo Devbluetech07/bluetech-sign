@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { documentsAPI, foldersAPI } from '../services/api';
-import { FileText, Plus, Search, CheckCircle, Clock, XCircle, Send, AlertCircle, Trash2, Eye, MoreVertical, ChevronLeft, ChevronRight, Loader2, FolderOpen } from 'lucide-react';
+import { FileText, Plus, CheckCircle, Clock, XCircle, Send, AlertCircle, Trash2, Eye, MoreVertical, ChevronLeft, ChevronRight, Loader2, FolderOpen } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useDebounce } from '../hooks/useDebounce';
 
 const statusConfig: any = {
   draft: { label: 'Rascunho', color: 'bg-gray-100 text-gray-700', icon: FileText },
@@ -16,22 +15,18 @@ const statusConfig: any = {
 };
 
 export default function DocumentsPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const [documents, setDocuments] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
   const [pagination, setPagination] = useState({ total: 0, page: 1, pages: 1 });
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || '');
-  const [folderFilter, setFolderFilter] = useState(searchParams.get('folder_id') || '');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [folderFilter, setFolderFilter] = useState('');
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
-  const debouncedSearch = useDebounce(search, 400);
 
   const loadDocuments = async (page = 1) => {
     setLoading(true);
     try {
       const params: any = { page, limit: 20 };
-      if (debouncedSearch) params.search = debouncedSearch;
       if (statusFilter) params.status = statusFilter;
       if (folderFilter) params.folder_id = folderFilter;
       const { data } = await documentsAPI.list(params);
@@ -41,9 +36,7 @@ export default function DocumentsPage() {
     setLoading(false);
   };
 
-  useEffect(() => { loadDocuments(); foldersAPI.list().then(r => setFolders(r.data)).catch(() => {}); }, [statusFilter, folderFilter, debouncedSearch]);
-
-  const handleSearch = (e: React.FormEvent) => { e.preventDefault(); loadDocuments(); };
+  useEffect(() => { loadDocuments(); foldersAPI.list().then(r => setFolders(r.data)).catch(() => {}); }, [statusFilter, folderFilter]);
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Excluir "${name}"?`)) return;
@@ -71,23 +64,17 @@ export default function DocumentsPage() {
   };
 
   return (
-    <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+    <div className="animate-fade-in page-shell">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Documentos</h1>
-          <p className="text-gray-500 text-sm mt-1">{pagination.total} documento(s) encontrado(s)</p>
+          <h1 className="section-title">Documentos</h1>
+          <p className="section-subtitle">{pagination.total} documento(s) encontrado(s)</p>
         </div>
-        <Link to="/documents/new" className="btn-primary flex items-center gap-2"><Plus className="w-4 h-4" /> Novo Documento</Link>
+        <Link to="/documents/new" className="btn-primary flex items-center gap-2 w-full sm:w-auto justify-center"><Plus className="w-4 h-4" /> Novo Documento</Link>
       </div>
 
-      {/* Filters */}
-      <div className="card p-4 mb-6">
-        <div className="flex flex-col sm:flex-row gap-3">
-          <form onSubmit={handleSearch} className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome..."
-              className="input-field pl-10" />
-          </form>
+      <div className="filter-bar">
+        <div className="filter-bar-inner">
           <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="input-field sm:w-48">
             <option value="">Todos os status</option>
             {Object.entries(statusConfig).map(([k, v]: any) => <option key={k} value={k}>{v.label}</option>)}
@@ -99,15 +86,14 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="card overflow-hidden">
+      <div className="table-container">
         {loading ? (
           <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
         ) : documents.length === 0 ? (
-          <div className="text-center py-20">
-            <FileText className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-600 mb-2">Nenhum documento encontrado</h3>
-            <p className="text-gray-400 mb-6">Comece criando seu primeiro documento</p>
+          <div className="empty-state">
+            <FileText className="empty-state-icon" />
+            <h3 className="empty-state-title">Nenhum documento encontrado</h3>
+            <p className="empty-state-text">Comece criando seu primeiro documento</p>
             <Link to="/documents/new" className="btn-primary inline-flex items-center gap-2"><Plus className="w-4 h-4" /> Criar Documento</Link>
           </div>
         ) : (
@@ -149,16 +135,16 @@ export default function DocumentsPage() {
             })}
           </div>
 
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[920px]">
+          <div className="hidden md:block mobile-table-scroll">
+            <table className="min-w-[920px]">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Documento</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Pasta</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Status</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Assinaturas</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Criado em</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Ações</th>
+                <tr>
+                  <th>Documento</th>
+                  <th className="hidden md:table-cell">Pasta</th>
+                  <th>Status</th>
+                  <th>Assinaturas</th>
+                  <th className="hidden sm:table-cell">Criado em</th>
+                  <th className="text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>

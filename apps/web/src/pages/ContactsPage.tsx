@@ -41,11 +41,11 @@ export default function ContactsPage() {
   };
 
   return (
-    <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div className="animate-fade-in page-shell">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Contatos</h1>
-          <p className="text-gray-500 text-sm mt-1">{total} contatos na agenda</p>
+          <h1 className="section-title">Contatos</h1>
+          <p className="section-subtitle">{total} contatos na agenda</p>
         </div>
         <button onClick={() => { setEditId(null); resetForm(); setShowModal(true); }} className="btn-primary w-full sm:w-auto inline-flex items-center justify-center gap-2">
           <Plus className="w-4 h-4" /> Novo Contato
@@ -61,12 +61,13 @@ export default function ContactsPage() {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
       ) : contacts.length === 0 ? (
-        <div className="card p-12 text-center">
-          <BookUser className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">Nenhum contato encontrado</p>
+        <div className="card empty-state">
+          <BookUser className="empty-state-icon" />
+          <p className="empty-state-title">Nenhum contato encontrado</p>
+          <p className="empty-state-text">Adicione contatos para facilitar o envio de documentos</p>
         </div>
       ) : (
-        <div className="card overflow-hidden">
+        <div className="table-container">
           <div className="space-y-3 p-4 md:hidden">
             {contacts.map((c) => (
               <div key={c.id} className="border border-gray-100 rounded-xl p-4">
@@ -81,15 +82,15 @@ export default function ContactsPage() {
             ))}
           </div>
 
-          <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[860px]">
+          <div className="hidden md:block mobile-table-scroll">
+          <table className="min-w-[860px]">
             <thead>
-              <tr className="bg-gray-50 border-b">
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Nome</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Email</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Telefone</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Empresa</th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-500 uppercase">Ações</th>
+              <tr>
+                <th>Nome</th>
+                <th className="hidden md:table-cell">Email</th>
+                <th className="hidden lg:table-cell">Telefone</th>
+                <th className="hidden lg:table-cell">Empresa</th>
+                <th className="text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -122,10 +123,10 @@ export default function ContactsPage() {
       )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-lg p-6 animate-slide-in" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-gray-900">{editId ? 'Editar Contato' : 'Novo Contato'}</h3>
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-panel max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">{editId ? 'Editar Contato' : 'Novo Contato'}</h3>
               <button onClick={() => setShowModal(false)} className="min-h-11 min-w-11 inline-flex items-center justify-center hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

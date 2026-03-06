@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
 import { settingsAPI, webhooksAPI } from '../services/api';
-import { Settings, Building, Palette, Mail, Webhook, Key, Loader2, Save, Plus, Trash2 } from 'lucide-react';
+import { Settings, Building, Palette, Mail, Webhook, Key, Loader2, Save, Plus, Trash2, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '../store/auth.store';
+import { WhiteLabelConfig, writeWhiteLabelConfig, readWhiteLabelConfig } from '../theme/whitelabel';
 
 export default function SettingsPage() {
+  const { updateUser } = useAuthStore();
   const [tab, setTab] = useState('organization');
   const [org, setOrg] = useState<any>({});
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [whiteLabel, setWhiteLabel] = useState<WhiteLabelConfig>({
+    visual_preset: 'gamified',
+  });
   const [settings, setSettings] = useState<any[]>([]);
   const [webhooks, setWebhooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,15 +27,62 @@ export default function SettingsPage() {
 
   useEffect(() => {
     Promise.all([settingsAPI.get(), webhooksAPI.list().catch(() => ({ data: [] }))])
-      .then(([s, w]) => { setOrg(s.data.organization); setSettings(s.data.settings); setWebhooks(w.data); setLoading(false); })
+      .then(([s, w]) => {
+        const localWhiteLabel = readWhiteLabelConfig();
+        setOrg(s.data.organization);
+        setWhiteLabel({
+          visual_preset: localWhiteLabel.visual_preset || s.data.organization?.visual_preset || 'gamified',
+          platform_name: localWhiteLabel.platform_name || s.data.organization?.platform_name || s.data.organization?.name || 'BlueTech Sign',
+          logo_url: localWhiteLabel.logo_url || s.data.organization?.logo_url || '',
+          brand_primary_color: localWhiteLabel.brand_primary_color || s.data.organization?.brand_primary_color || '#1E3A5F',
+          brand_secondary_color: localWhiteLabel.brand_secondary_color || s.data.organization?.brand_secondary_color || '#0EA5E9',
+          brand_accent_color: localWhiteLabel.brand_accent_color || s.data.organization?.brand_accent_color || '#06B6D4',
+        });
+        setSettings(s.data.settings);
+        setWebhooks(w.data);
+        setLoading(false);
+      })
       .catch(() => setLoading(false));
     settingsAPI.listApiKeys().then((r) => setApiKeys(r.data || [])).catch(() => null);
   }, []);
 
   const saveOrg = async () => {
     setSaving(true);
-    try { await settingsAPI.updateOrg(org); toast.success('Organização atualizada'); } catch { toast.error('Erro'); }
+    try {
+      const payload = { ...org, ...whiteLabel };
+      await settingsAPI.updateOrg(payload);
+      writeWhiteLabelConfig(whiteLabel);
+      updateUser({
+        brand_primary_color: whiteLabel.brand_primary_color,
+        brand_secondary_color: whiteLabel.brand_secondary_color,
+        brand_accent_color: whiteLabel.brand_accent_color,
+        logo_url: whiteLabel.logo_url,
+        platform_name: whiteLabel.platform_name,
+        visual_preset: whiteLabel.visual_preset,
+        org_name: whiteLabel.platform_name || org.name,
+      } as any);
+      toast.success('White label e organização atualizados');
+    } catch {
+      toast.error('Erro');
+    }
     setSaving(false);
+  };
+
+  const uploadLogo = async (file?: File | null) => {
+    if (!file) return;
+    setUploadingLogo(true);
+    try {
+      const formData = new FormData();
+      formData.append('logo', file);
+      const { data } = await settingsAPI.uploadLogo(formData);
+      const logoUrl = data?.logo_url || data?.url || '';
+      setWhiteLabel((prev) => ({ ...prev, logo_url: logoUrl }));
+      toast.success('Logo enviada');
+    } catch {
+      toast.error('Falha ao enviar logo');
+    } finally {
+      setUploadingLogo(false);
+    }
   };
 
   const saveSetting = async (key: string, value: string) => {
@@ -75,7 +129,7 @@ export default function SettingsPage() {
 
   const tabs = [
     { id: 'organization', label: 'Organização', icon: Building },
-    { id: 'brand', label: 'Marca/Estética', icon: Palette },
+    { id: 'brand', label: 'White Label', icon: Palette },
     { id: 'notifications', label: 'Notificações', icon: Mail },
     { id: 'webhooks', label: 'Webhooks', icon: Webhook },
     { id: 'advanced', label: 'Avançado', icon: Key },
@@ -86,13 +140,18 @@ export default function SettingsPage() {
   if (loading) return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>;
 
   return (
-    <div className="animate-fade-in">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Configurações</h1>
+    <div className="animate-fade-in page-shell">
+      <div className="page-header">
+        <div>
+          <h1 className="section-title">Configurações</h1>
+          <p className="section-subtitle">Gerencie sua organização, marca e integrações</p>
+        </div>
+      </div>
 
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar tabs */}
         <div className="lg:w-56 flex-shrink-0">
-          <div className="card p-2 flex lg:flex-col gap-1 overflow-x-auto">
+          <div className="card-glass p-2 flex lg:flex-col gap-1 overflow-x-auto">
             {tabs.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all
@@ -106,8 +165,8 @@ export default function SettingsPage() {
         {/* Content */}
         <div className="flex-1">
           {tab === 'organization' && (
-            <div className="card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Dados da Organização</h2>
+            <div className="card-glass p-6 space-y-4">
+              <h2 className="card-section-title">Dados da Organização</h2>
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome da Empresa</label>
@@ -133,45 +192,87 @@ export default function SettingsPage() {
           )}
 
           {tab === 'brand' && (
-            <div className="card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Identidade Visual</h2>
-              <p className="text-sm text-gray-500 mb-4">Personalize a aparência dos emails e páginas de assinatura enviados pela sua empresa.</p>
+            <div className="card-glass p-6 space-y-4">
+              <h2 className="card-section-title">White Label + Estética Gamificada</h2>
+              <p className="text-sm text-gray-500 mb-4">Controle nome da plataforma, logo, paleta e estilo visual (clean/gamified) com aplicação imediata.</p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome da plataforma</label>
+                  <input
+                    type="text"
+                    value={whiteLabel.platform_name || ''}
+                    onChange={e => setWhiteLabel({ ...whiteLabel, platform_name: e.target.value })}
+                    className="input-field"
+                    placeholder="Ex: GameSign Arena"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Preset visual</label>
+                  <select
+                    value={whiteLabel.visual_preset || 'gamified'}
+                    onChange={e => setWhiteLabel({ ...whiteLabel, visual_preset: e.target.value as 'clean' | 'gamified' })}
+                    className="input-field"
+                  >
+                    <option value="gamified">Gamified Arena (neon)</option>
+                    <option value="clean">Clean Professional</option>
+                  </select>
+                </div>
+              </div>
               <div className="grid md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cor Primária</label>
                   <div className="flex items-center gap-2">
-                    <input type="color" value={org.brand_primary_color || '#1E3A5F'} onChange={e => setOrg({ ...org, brand_primary_color: e.target.value })} className="min-h-11 min-w-11 w-11 h-11 rounded border cursor-pointer" />
-                    <input type="text" value={org.brand_primary_color || '#1E3A5F'} onChange={e => setOrg({ ...org, brand_primary_color: e.target.value })} className="input-field" />
+                    <input type="color" value={whiteLabel.brand_primary_color || '#1E3A5F'} onChange={e => setWhiteLabel({ ...whiteLabel, brand_primary_color: e.target.value })} className="min-h-11 min-w-11 w-11 h-11 rounded border cursor-pointer" />
+                    <input type="text" value={whiteLabel.brand_primary_color || '#1E3A5F'} onChange={e => setWhiteLabel({ ...whiteLabel, brand_primary_color: e.target.value })} className="input-field" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cor Secundária</label>
                   <div className="flex items-center gap-2">
-                    <input type="color" value={org.brand_secondary_color || '#0EA5E9'} onChange={e => setOrg({ ...org, brand_secondary_color: e.target.value })} className="min-h-11 min-w-11 w-11 h-11 rounded border cursor-pointer" />
-                    <input type="text" value={org.brand_secondary_color || '#0EA5E9'} onChange={e => setOrg({ ...org, brand_secondary_color: e.target.value })} className="input-field" />
+                    <input type="color" value={whiteLabel.brand_secondary_color || '#0EA5E9'} onChange={e => setWhiteLabel({ ...whiteLabel, brand_secondary_color: e.target.value })} className="min-h-11 min-w-11 w-11 h-11 rounded border cursor-pointer" />
+                    <input type="text" value={whiteLabel.brand_secondary_color || '#0EA5E9'} onChange={e => setWhiteLabel({ ...whiteLabel, brand_secondary_color: e.target.value })} className="input-field" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Cor Accent</label>
                   <div className="flex items-center gap-2">
-                    <input type="color" value={org.brand_accent_color || '#06B6D4'} onChange={e => setOrg({ ...org, brand_accent_color: e.target.value })} className="min-h-11 min-w-11 w-11 h-11 rounded border cursor-pointer" />
-                    <input type="text" value={org.brand_accent_color || '#06B6D4'} onChange={e => setOrg({ ...org, brand_accent_color: e.target.value })} className="input-field" />
+                    <input type="color" value={whiteLabel.brand_accent_color || '#06B6D4'} onChange={e => setWhiteLabel({ ...whiteLabel, brand_accent_color: e.target.value })} className="min-h-11 min-w-11 w-11 h-11 rounded border cursor-pointer" />
+                    <input type="text" value={whiteLabel.brand_accent_color || '#06B6D4'} onChange={e => setWhiteLabel({ ...whiteLabel, brand_accent_color: e.target.value })} className="input-field" />
                   </div>
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Logo da plataforma</label>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input type="file" accept="image/*" className="input-field" onChange={e => uploadLogo(e.target.files?.[0])} />
+                  <button type="button" className="btn-secondary inline-flex items-center justify-center gap-2" disabled={uploadingLogo}>
+                    {uploadingLogo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} Upload
+                  </button>
+                </div>
+                {whiteLabel.logo_url && (
+                  <img src={whiteLabel.logo_url} alt="Logo" className="mt-3 h-14 w-14 rounded-xl object-cover border border-slate-300" />
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Header customizado (email)</label>
                 <textarea value={org.custom_email_header || ''} onChange={e => setOrg({ ...org, custom_email_header: e.target.value })} className="input-field" rows={2} placeholder="HTML do cabeçalho do email" />
               </div>
               {/* Preview */}
-              <div className="p-4 rounded-xl border bg-brand-700">
+              <div className="p-4 rounded-xl border bg-gradient-to-r from-slate-900 to-slate-800 border-cyan-400/20">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                    <Settings className="w-4 h-4 text-white" />
-                  </div>
-                  <span className="text-white font-bold">{org.name || 'Sua Empresa'}</span>
+                  {whiteLabel.logo_url ? (
+                    <img src={whiteLabel.logo_url} alt="Logo preview" className="w-8 h-8 rounded-lg object-cover" />
+                  ) : (
+                    <div className="w-8 h-8 bg-cyan-400/20 rounded-lg flex items-center justify-center">
+                      <Settings className="w-4 h-4 text-cyan-100" />
+                    </div>
+                  )}
+                  <span className="text-white font-bold">{whiteLabel.platform_name || org.name || 'Sua Empresa'}</span>
+                  <span className="badge bg-cyan-400/15 text-cyan-100 border border-cyan-300/20">
+                    {whiteLabel.visual_preset === 'clean' ? 'Clean' : 'Gamified'}
+                  </span>
                 </div>
-                <p className="text-white/60 text-sm mt-2">Preview da cor primária nos emails e páginas de assinatura</p>
+                <p className="text-cyan-100/70 text-sm mt-2">Preview do white label aplicado em tempo real no sistema.</p>
               </div>
               <button onClick={saveOrg} disabled={saving} className="btn-primary flex items-center gap-2">
                 <Save className="w-4 h-4" /> Salvar Marca
@@ -180,8 +281,8 @@ export default function SettingsPage() {
           )}
 
           {tab === 'notifications' && (
-            <div className="card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Configurações de Notificação</h2>
+            <div className="card-glass p-6 space-y-4">
+              <h2 className="card-section-title">Configurações de Notificação</h2>
               {settings.filter(s => ['email_notifications', 'whatsapp_notifications', 'default_remind_interval', 'default_deadline_days', 'default_auth_method'].includes(s.key)).map(s => (
                 <div key={s.key} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-gray-100">
                   <div>
@@ -205,9 +306,9 @@ export default function SettingsPage() {
           )}
 
           {tab === 'webhooks' && (
-            <div className="card p-6">
+            <div className="card-glass p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">Webhooks</h2>
+                <h2 className="card-section-title mb-0">Webhooks</h2>
                 <button onClick={() => { setWhForm({ url: '', events: [] }); setShowWebhookModal(true); }} className="btn-primary text-sm flex items-center gap-1"><Plus className="w-4 h-4" /> Novo</button>
               </div>
               {webhooks.length === 0 ? (
@@ -272,8 +373,8 @@ export default function SettingsPage() {
           )}
 
           {tab === 'advanced' && (
-            <div className="card p-6 space-y-4">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Configurações Avançadas</h2>
+            <div className="card-glass p-6 space-y-4">
+              <h2 className="card-section-title">Configurações Avançadas</h2>
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <p className="text-sm text-amber-800"><strong>Biometria Facial:</strong> Para habilitar, configure a chave da API BluePoint nas variáveis de ambiente (BLUEPOINT_API_KEY).</p>
                 <p className="text-xs text-amber-600 mt-1">Endpoint: https://bluepoint-api.bluetechfilms.com.br/api/v1/biometria/</p>
@@ -292,9 +393,9 @@ export default function SettingsPage() {
       </div>
 
       {showWebhookModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowWebhookModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-slide-in" onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-4">Novo Webhook</h3>
+        <div className="modal-overlay" onClick={() => setShowWebhookModal(false)}>
+          <div className="modal-panel max-w-md" onClick={e => e.stopPropagation()}>
+            <h3 className="modal-title mb-4">Novo Webhook</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">URL *</label>

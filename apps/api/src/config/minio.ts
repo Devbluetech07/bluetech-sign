@@ -43,8 +43,8 @@ export async function uploadFile(key: string, buffer: Buffer, contentType: strin
   return key;
 }
 
-export async function getFileUrl(key: string, expiry = 86400): Promise<string> {
-  return minioClient.presignedGetObject(BUCKET, key, expiry);
+export async function getFileUrl(key: string, _expiry = 86400): Promise<string> {
+  return `${env.urls.api}/api/files/${key}`;
 }
 
 export async function getFileBuffer(key: string): Promise<Buffer> {

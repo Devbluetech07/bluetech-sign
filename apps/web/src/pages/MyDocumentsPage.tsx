@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { CheckCircle, Clock, Loader2, Mail, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { publicAPI } from '../services/api';
+import { readWhiteLabelConfig } from '../theme/whitelabel';
 
 interface PublicDocument {
   id: string;
@@ -16,6 +17,7 @@ interface PublicDocument {
 }
 
 export default function MyDocumentsPage() {
+  const whiteLabel = readWhiteLabelConfig();
   const [step, setStep] = useState<'email' | 'code' | 'list'>('email');
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
@@ -62,15 +64,15 @@ export default function MyDocumentsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-brand-700 to-accent-500 px-4 py-10">
+    <div className="min-h-screen bg-gradient-to-br from-brand-700 via-brand-800 to-accent-500 px-4 py-10">
       <div className="max-w-3xl mx-auto space-y-5">
         <div className="text-center text-white">
           <h1 className="text-2xl font-bold">Portal do Signatario</h1>
-          <p className="text-sm text-blue-100 mt-1">Consulte seus documentos sem login</p>
+          <p className="text-sm text-blue-100 mt-1">Consulte seus documentos em {whiteLabel.platform_name || 'BlueTech'} sem login</p>
         </div>
 
         {step === 'email' && (
-          <div className="card p-6">
+          <div className="card-glass p-6">
             <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
             <div className="relative">
               <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -84,7 +86,7 @@ export default function MyDocumentsPage() {
         )}
 
         {step === 'code' && (
-          <div className="card p-6">
+          <div className="card-glass p-6">
             <p className="text-sm text-gray-600 mb-3">Enviamos um codigo de 6 digitos para <strong>{email}</strong>.</p>
             <input value={code} onChange={(e) => setCode(e.target.value)} maxLength={6} className="input-field text-center text-2xl tracking-[0.5em]" placeholder="000000" />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
@@ -98,7 +100,7 @@ export default function MyDocumentsPage() {
         )}
 
         {step === 'list' && (
-          <div className="card p-5">
+          <div className="card-glass p-5">
             <div className="flex gap-2 mb-4 overflow-x-auto">
               <button onClick={() => setTab('pending')} className={`min-h-11 px-4 rounded-lg ${tab === 'pending' ? 'bg-brand-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
                 Pendentes

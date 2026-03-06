@@ -3,7 +3,8 @@ import { authAPI } from '../services/api';
 
 interface User {
   id: string; organization_id: string; name: string; email: string; cpf?: string; phone?: string;
-  avatar_url?: string; role: string; permissions: any; org_name?: string; brand_primary_color?: string; logo_url?: string;
+  avatar_url?: string; role: string; permissions: any; org_name?: string; brand_primary_color?: string; brand_secondary_color?: string;
+  brand_accent_color?: string; logo_url?: string; platform_name?: string; visual_preset?: 'clean' | 'gamified';
 }
 
 interface AuthState {

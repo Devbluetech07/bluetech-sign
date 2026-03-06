@@ -6,6 +6,7 @@ interface ModalProps {
   title: string;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg';
+  glass?: boolean;
 }
 
 const sizeClass: Record<NonNullable<ModalProps['size']>, string> = {
@@ -14,7 +15,7 @@ const sizeClass: Record<NonNullable<ModalProps['size']>, string> = {
   lg: 'max-w-4xl',
 };
 
-export default function Modal({ open, onClose, title, children, size = 'md' }: ModalProps) {
+export default function Modal({ open, onClose, title, children, size = 'md', glass = false }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (event: KeyboardEvent) => {
@@ -28,7 +29,7 @@ export default function Modal({ open, onClose, title, children, size = 'md' }: M
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center" onClick={onClose}>
-      <div className={`w-full ${sizeClass[size]} rounded-2xl bg-white p-6`} onClick={(event) => event.stopPropagation()}>
+      <div className={`w-full ${sizeClass[size]} rounded-2xl p-6 ${glass ? 'card-glass' : 'bg-white border border-slate-100 shadow-soft'}`} onClick={(event) => event.stopPropagation()}>
         <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
         {children}
       </div>

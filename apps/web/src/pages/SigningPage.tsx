@@ -127,7 +127,7 @@ export default function SigningPage() {
       toast.success('Autenticacao validada');
       proceedAfterAuth();
     } catch {
-      toast.error('Nao foi possivel validar autenticacao');
+      toast.error('Não foi possível validar autenticação');
     } finally {
       setVerifying(false);
     }
@@ -254,9 +254,9 @@ export default function SigningPage() {
   };
 
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-sky-50">
       <Toaster position="top-center" />
-      <header className="bg-white border-b border-gray-200">
+      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
           <div className="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center">
             <Shield className="w-5 h-5 text-white" />
@@ -267,7 +267,7 @@ export default function SigningPage() {
           </div>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-3 sm:px-4 py-5 sm:py-8">{children}</main>
+      <main className="max-w-5xl mx-auto px-3 sm:px-4 py-5 sm:py-8 page-shell">{children}</main>
     </div>
   );
 
@@ -308,7 +308,7 @@ export default function SigningPage() {
   if (screen === 'welcome') {
     return (
       <Wrapper>
-        <div className="card p-6 sm:p-8 space-y-4">
+        <div className="card-glass p-6 sm:p-8 space-y-4">
           <h2 className="text-xl font-bold text-gray-900">Bem-vindo ao fluxo de assinatura</h2>
           <p className="text-sm text-gray-600">Documento: <strong>{data?.document?.name}</strong></p>
           <p className="text-sm text-gray-600">Metodo de autenticacao: {AUTH_LABELS[data?.signer?.auth_method] || data?.signer?.auth_method}</p>
@@ -341,7 +341,7 @@ export default function SigningPage() {
 
     return (
       <Wrapper>
-        <div className="max-w-md mx-auto card p-5 sm:p-8 space-y-4">
+        <div className="max-w-md mx-auto card-glass p-5 sm:p-8 space-y-4">
           <div className="text-center">
             <div className="w-14 h-14 bg-brand-50 rounded-full flex items-center justify-center mx-auto mb-2">
               <Lock className="w-7 h-7 text-brand-600" />
@@ -437,7 +437,7 @@ export default function SigningPage() {
 
       return (
         <Wrapper>
-          <div className="card p-6 max-w-lg mx-auto">
+          <div className="card-glass p-6 max-w-lg mx-auto">
             <h3 className="font-semibold text-gray-900 mb-2">Enviar fotos do documento</h3>
             <p className="text-sm text-gray-500 mb-4">As capturas estao prontas para envio.</p>
             <button onClick={submitDocumentPhotos} disabled={verifying} className="btn-primary w-full inline-flex items-center justify-center gap-2">
@@ -487,7 +487,7 @@ export default function SigningPage() {
       }
       return (
         <Wrapper>
-          <div className="card p-6 max-w-lg mx-auto">
+          <div className="card-glass p-6 max-w-lg mx-auto">
             <button onClick={submitResidencePhoto} disabled={verifying} className="btn-primary w-full inline-flex items-center justify-center gap-2">
               {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Enviar comprovante
@@ -501,7 +501,7 @@ export default function SigningPage() {
   if (screen === 'view_document') {
     return (
       <Wrapper>
-        <div className="card overflow-hidden">
+        <div className="card-glass overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <h2 className="font-semibold text-gray-900 inline-flex items-center gap-2">
               <FileText className="w-4 h-4" /> {data?.document?.name}
@@ -526,7 +526,7 @@ export default function SigningPage() {
   if (screen === 'sign') {
     return (
       <Wrapper>
-        <div className="max-w-2xl mx-auto card p-5 sm:p-8 space-y-5">
+        <div className="max-w-2xl mx-auto card-glass p-5 sm:p-8 space-y-5">
           <h2 className="text-xl font-semibold text-gray-900 text-center">Assinar documento</h2>
 
           {!metadata.require_handwritten && (

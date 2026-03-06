@@ -45,11 +45,11 @@ export default function TemplatesPage() {
   const filtered = templates.filter(t => !search || t.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <div className="animate-fade-in">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div className="animate-fade-in page-shell">
+      <div className="page-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Modelos</h1>
-          <p className="text-gray-500 text-sm mt-1">Templates reutilizáveis para documentos</p>
+          <h1 className="section-title">Modelos</h1>
+          <p className="section-subtitle">Templates reutilizáveis para documentos</p>
         </div>
         <button onClick={() => setShowModal(true)} className="btn-primary w-full sm:w-auto inline-flex items-center justify-center gap-2">
           <Plus className="w-4 h-4" /> Novo Modelo
@@ -66,14 +66,15 @@ export default function TemplatesPage() {
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-brand-600" /></div>
       ) : filtered.length === 0 ? (
-        <div className="card p-12 text-center">
-          <FileSignature className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500">Nenhum modelo encontrado</p>
+        <div className="card empty-state">
+          <FileSignature className="empty-state-icon" />
+          <p className="empty-state-title">Nenhum modelo encontrado</p>
+          <p className="empty-state-text">Crie um modelo para agilizar a criação de documentos</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
           {filtered.map(t => (
-            <div key={t.id} className="card p-5 hover:border-brand-200 transition-all">
+            <div key={t.id} className="card-glass p-5 hover:border-brand-200 transition-all">
               <div className="flex items-start justify-between mb-3">
                 <div className="w-10 h-10 bg-brand-50 rounded-lg flex items-center justify-center">
                   <FileSignature className="w-5 h-5 text-brand-600" />
@@ -100,34 +101,34 @@ export default function TemplatesPage() {
 
       {/* Create Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowModal(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-slide-in" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-gray-900">Novo Modelo</h3>
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal-panel max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Novo Modelo</h3>
               <button onClick={() => setShowModal(false)} className="min-h-11 min-w-11 inline-flex items-center justify-center hover:bg-gray-100 rounded"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+                <label className="form-label">Nome *</label>
                 <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} className="input-field" placeholder="Ex: Contrato de Prestação de Serviço" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                <label className="form-label">Categoria</label>
                 <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="input-field">
                   <option value="">Selecione...</option>
                   {categories.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
+                <label className="form-label">Descrição</label>
                 <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} className="input-field" rows={2} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mensagem padrão</label>
+                <label className="form-label">Mensagem padrão</label>
                 <textarea value={form.default_message} onChange={e => setForm({ ...form, default_message: e.target.value })} className="input-field" rows={2} placeholder="Mensagem enviada junto ao documento" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Arquivo modelo (PDF)</label>
+                <label className="form-label">Arquivo modelo (PDF)</label>
                 <input type="file" accept=".pdf,.docx" onChange={e => setFile(e.target.files?.[0] || null)} className="input-field text-sm" />
               </div>
             </div>

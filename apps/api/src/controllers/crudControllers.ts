@@ -47,7 +47,7 @@ export const templatesController = {
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
         [req.user!.organization_id, name, description, category, fileKey, fileName, fileSize,
          signer_roles ? JSON.stringify(signer_roles) : '[]', default_message,
-         default_auth_methods ? `{${default_auth_methods.join(',')}}` : '{email_token}',
+         Array.isArray(default_auth_methods) ? `{${default_auth_methods.join(',')}}` : '{email_token}',
          fields ? JSON.stringify(fields) : '[]', req.user!.id]
       );
       await createAuditLog({ organization_id: req.user!.organization_id, user_id: req.user!.id, action: 'template_created', description: `Template "${name}" criado` });
@@ -230,9 +230,11 @@ export const webhooksController = {
   async create(req: AuthRequest, res: Response) {
     try {
       const { url, events } = req.body;
+      if (!url) return res.status(400).json({ error: 'URL é obrigatória' });
+      const eventArray = Array.isArray(events) ? events : [];
       const result = await query(
         'INSERT INTO webhooks (organization_id, url, events, created_by) VALUES ($1,$2,$3,$4) RETURNING *',
-        [req.user!.organization_id, url, `{${events.join(',')}}`, req.user!.id]
+        [req.user!.organization_id, url, `{${eventArray.join(',')}}`, req.user!.id]
       );
       res.status(201).json(result.rows[0]);
     } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -256,15 +258,19 @@ export const settingsController = {
   },
   async updateOrganization(req: AuthRequest, res: Response) {
     try {
-      const { name, cnpj, email, phone, brand_primary_color, brand_secondary_color, brand_accent_color, custom_email_header, custom_email_footer } = req.body;
+      const { name, cnpj, email, phone, brand_primary_color, brand_secondary_color, brand_accent_color,
+        custom_email_header, custom_email_footer, platform_name, visual_preset, logo_url } = req.body;
       const result = await query(
-        `UPDATE organizations SET name=COALESCE($1,name), cnpj=COALESCE($2,cnpj), email=COALESCE($3,email),
+        `UPDATE organizations SET
+         name=COALESCE($1,name), cnpj=COALESCE($2,cnpj), email=COALESCE($3,email),
          phone=COALESCE($4,phone), brand_primary_color=COALESCE($5,brand_primary_color),
          brand_secondary_color=COALESCE($6,brand_secondary_color), brand_accent_color=COALESCE($7,brand_accent_color),
-         custom_email_header=COALESCE($8,custom_email_header), custom_email_footer=COALESCE($9,custom_email_footer)
-         WHERE id=$10 RETURNING *`,
+         custom_email_header=COALESCE($8,custom_email_header), custom_email_footer=COALESCE($9,custom_email_footer),
+         platform_name=COALESCE($10,platform_name), visual_preset=COALESCE($11,visual_preset),
+         logo_url=COALESCE($12,logo_url)
+         WHERE id=$13 RETURNING *`,
         [name, cnpj, email, phone, brand_primary_color, brand_secondary_color, brand_accent_color,
-         custom_email_header, custom_email_footer, req.user!.organization_id]
+         custom_email_header, custom_email_footer, platform_name, visual_preset, logo_url, req.user!.organization_id]
       );
       res.json(result.rows[0]);
     } catch (e: any) { res.status(500).json({ error: e.message }); }
@@ -272,10 +278,11 @@ export const settingsController = {
   async updateSetting(req: AuthRequest, res: Response) {
     try {
       const { key, value } = req.body;
+      const jsonValue = typeof value === 'string' ? JSON.stringify(value) : JSON.stringify(value);
       await query(
-        `INSERT INTO system_settings (organization_id, key, value) VALUES ($1,$2,$3)
-         ON CONFLICT (organization_id, key) DO UPDATE SET value=$3`,
-        [req.user!.organization_id, key, value]
+        `INSERT INTO system_settings (organization_id, key, value) VALUES ($1,$2,$3::jsonb)
+         ON CONFLICT (organization_id, key) DO UPDATE SET value=$3::jsonb, updated_at=NOW()`,
+        [req.user!.organization_id, key, jsonValue]
       );
       res.json({ message: 'Configuração atualizada' });
     } catch (e: any) { res.status(500).json({ error: e.message }); }

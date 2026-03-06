@@ -55,11 +55,11 @@ export default function DocumentDetailPage() {
   const sc = statusConfig[doc.status] || statusConfig.draft;
 
   return (
-    <div className="animate-fade-in">
+    <div className="animate-fade-in page-shell">
       <button onClick={() => navigate('/documents')} className="min-h-11 inline-flex items-center gap-2 text-gray-500 hover:text-gray-700 mb-6 text-sm"><ArrowLeft className="w-4 h-4" /> Documentos</button>
 
       {/* Header */}
-      <div className="card p-6 mb-6">
+      <div className="card-glass p-6 mb-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 bg-brand-50 rounded-xl flex items-center justify-center"><FileText className="w-6 h-6 text-brand-600" /></div>
@@ -135,7 +135,7 @@ export default function DocumentDetailPage() {
 
       {/* Audit Log */}
       {tab === 'audit' && (
-        <div className="card p-6">
+        <div className="card-glass p-6">
           <div className="space-y-0">
             {(doc.audit_log || []).map((log: any, i: number) => (
               <div key={log.id} className="flex gap-4 pb-6 relative">

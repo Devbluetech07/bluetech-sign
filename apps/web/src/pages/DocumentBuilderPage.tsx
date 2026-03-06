@@ -36,7 +36,7 @@ export default function DocumentBuilderPage() {
         setSigners(mapped);
         setActiveSignerId(mapped[0]?.id || mapped[0]?.temp_id || null);
       })
-      .catch(() => toast.error('Nao foi possivel carregar o documento'))
+      .catch(() => toast.error('Não foi possível carregar o documento'))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -158,7 +158,7 @@ export default function DocumentBuilderPage() {
         </div>
         <div className="xl:col-span-3 space-y-3">
           <div className="card p-4">
-            <p className="text-sm font-semibold text-gray-900 mb-2">Signatarios</p>
+            <p className="text-sm font-semibold text-gray-900 mb-2">Signatários</p>
             <div className="space-y-2">
               {signers.map((signer) => {
                 const key = signer.id || signer.temp_id;
