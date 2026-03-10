@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 
 class PdfViewer extends StatefulWidget {
   final String? fileUrl;
+  final Uint8List? fileBytes;
   final int currentPage;
+  final ValueChanged<int>? onPageChanged;
+  final ValueChanged<int>? onDocumentLoaded;
 
   const PdfViewer({
     super.key,
     this.fileUrl,
+    this.fileBytes,
     required this.currentPage,
+    this.onPageChanged,
+    this.onDocumentLoaded,
   });
 
   @override
@@ -33,7 +40,8 @@ class _PdfViewerState extends State<PdfViewer> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.fileUrl == null || widget.fileUrl!.isEmpty) {
+    if ((widget.fileBytes == null || widget.fileBytes!.isEmpty) &&
+        (widget.fileUrl == null || widget.fileUrl!.isEmpty)) {
       return Container(
         color: Colors.black12,
         child: const Center(
@@ -45,14 +53,38 @@ class _PdfViewerState extends State<PdfViewer> {
       );
     }
 
-    return SfPdfViewer.network(
-      widget.fileUrl!,
-      controller: _pdfViewerController,
-      canShowScrollHead: false,
-      canShowScrollStatus: false,
-      enableDoubleTapZooming: false,
-      enableTextSelection: false,
-      pageLayoutMode: PdfPageLayoutMode.single,
-    );
+    final viewer = widget.fileBytes != null && widget.fileBytes!.isNotEmpty
+        ? SfPdfViewer.memory(
+            widget.fileBytes!,
+            controller: _pdfViewerController,
+            canShowScrollHead: false,
+            canShowScrollStatus: false,
+            enableDoubleTapZooming: false,
+            enableTextSelection: false,
+            pageLayoutMode: PdfPageLayoutMode.single,
+            onDocumentLoaded: (details) {
+              widget.onDocumentLoaded?.call(details.document.pages.count);
+            },
+            onPageChanged: (details) {
+              widget.onPageChanged?.call(details.newPageNumber);
+            },
+          )
+        : SfPdfViewer.network(
+            widget.fileUrl!,
+            controller: _pdfViewerController,
+            canShowScrollHead: false,
+            canShowScrollStatus: false,
+            enableDoubleTapZooming: false,
+            enableTextSelection: false,
+            pageLayoutMode: PdfPageLayoutMode.single,
+            onDocumentLoaded: (details) {
+              widget.onDocumentLoaded?.call(details.document.pages.count);
+            },
+            onPageChanged: (details) {
+              widget.onPageChanged?.call(details.newPageNumber);
+            },
+          );
+
+    return viewer;
   }
 }

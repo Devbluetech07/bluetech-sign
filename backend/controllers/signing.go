@@ -1,11 +1,15 @@
 package controllers
 
 import (
+	"context"
+	"crypto/sha256"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math/big"
-	"os"
 	"strings"
 	"time"
 
@@ -13,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gustavogomes000/singproof-go/config"
 	"github.com/gustavogomes000/singproof-go/models"
+	"github.com/minio/minio-go/v7"
 )
 
 // GetSignToken fetches document and signer info by the public access token
@@ -229,13 +234,27 @@ func completeDocumentIfAllSigned(documentID uuid.UUID) {
 	if err := config.DB.First(&doc, "id = ?", documentID).Error; err != nil {
 		return
 	}
+
+	finalHash, finalFileKey, evidenceKey, err := gerarDocumentoFinal(documentID)
+	if err != nil {
+		config.DB.Create(&models.AuditEntry{
+			DocumentID: doc.ID,
+			Action:     "document_final_failed",
+			Actor:      "System",
+			Details:    "Falha ao gerar documento final: " + err.Error(),
+			Timestamp:  time.Now(),
+		})
+		return
+	}
+
 	doc.Status = "completed"
+	doc.SignedFileKey = finalFileKey
 	config.DB.Save(&doc)
 	config.DB.Create(&models.AuditEntry{
 		DocumentID: doc.ID,
 		Action:     "document_completed",
 		Actor:      "System",
-		Details:    "Todas as assinaturas coletadas. Finalizado.",
+		Details:    "Todas as assinaturas coletadas. Finalizado. hash_sha256=" + finalHash + "; evidencias=" + evidenceKey,
 		Timestamp:  time.Now(),
 	})
 }
@@ -272,16 +291,13 @@ func finalizeSignerIfReady(signer *models.Signer, tokenCode string, c *fiber.Ctx
 		return fiber.NewError(400, "Finalize as validações pendentes antes de concluir")
 	}
 
-	if signer.AuthMethod == "email_token" {
-		if tokenCode == "" || signer.SignToken != tokenCode || signer.SignTokenExpiresAt == nil || time.Now().After(*signer.SignTokenExpiresAt) {
-			return fiber.NewError(400, "Código inválido ou expirado")
-		}
-	}
 	if signer.AuthMethod == "biometria_facial" && !signer.BiometriaVerified {
 		return fiber.NewError(400, "Verificação biométrica necessária antes de concluir")
 	}
 
 	now := time.Now()
+	hashAssinatura := gerarHashAssinatura(*signer, c)
+
 	signer.Status = "signed"
 	signer.SignedAt = &now
 	signer.SignedIP = c.IP()
@@ -295,7 +311,7 @@ func finalizeSignerIfReady(signer *models.Signer, tokenCode string, c *fiber.Ctx
 		DocumentID: signer.DocumentID,
 		Action:     "signer_signed",
 		Actor:      signer.Name,
-		Details:    signer.Name + " concluiu a assinatura",
+		Details:    signer.Name + " concluiu a assinatura. hash_sha256=" + hashAssinatura,
 		Timestamp:  now,
 	})
 	notifyNextSignerInSequentialFlow(signer.DocumentID.String(), signer.SignOrder)
@@ -460,12 +476,40 @@ func DownloadSigningDocument(c *fiber.Ctx) error {
 	if strings.TrimSpace(doc.FileKey) == "" {
 		return c.Status(404).JSON(fiber.Map{"error": "Arquivo não encontrado"})
 	}
-	apiPublicURL := os.Getenv("API_PUBLIC_URL")
-	if apiPublicURL == "" {
-		apiPublicURL = "http://localhost:4101"
+
+	fileKey := doc.FileKey
+	if doc.Status == "completed" && strings.TrimSpace(doc.SignedFileKey) != "" {
+		fileKey = doc.SignedFileKey
 	}
-	fileUrl := strings.TrimRight(apiPublicURL, "/") + "/api/v1/documents/download/" + doc.FileKey
-	return c.Redirect(fileUrl, 302)
+
+	object, err := config.MinioClient.GetObject(
+		context.Background(),
+		config.MinioBucket,
+		config.ResolveObjectName(fileKey),
+		minio.GetObjectOptions{},
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao acessar arquivo no storage"})
+	}
+	defer object.Close()
+
+	data, err := io.ReadAll(object)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao ler arquivo"})
+	}
+
+	contentType := strings.TrimSpace(doc.FileType)
+	if contentType == "" {
+		contentType = "application/pdf"
+	}
+	fileName := strings.TrimSpace(doc.FileName)
+	if fileName == "" {
+		fileName = "documento.pdf"
+	}
+
+	c.Set("Content-Type", contentType)
+	c.Set("Content-Disposition", `inline; filename="`+fileName+`"`)
+	return c.Send(data)
 }
 
 func SignDocument(c *fiber.Ctx) error {
@@ -506,4 +550,90 @@ func generateOTPCode() string {
 		return "123456" // Fallback seguro
 	}
 	return fmt.Sprintf("%06d", n.Int64())
+}
+
+func gerarHashAssinatura(signer models.Signer, c *fiber.Ctx) string {
+	base := fmt.Sprintf(
+		"%s|%s|%s|%d|%s|%s|%d",
+		signer.ID.String(),
+		signer.DocumentID.String(),
+		c.IP(),
+		signer.SignOrder,
+		c.Get("User-Agent"),
+		time.Now().UTC().Format(time.RFC3339Nano),
+		time.Now().UnixNano(),
+	)
+	hash := sha256.Sum256([]byte(base))
+	return hex.EncodeToString(hash[:])
+}
+
+func gerarDocumentoFinal(documentID uuid.UUID) (string, string, string, error) {
+	var doc models.Document
+	if err := config.DB.First(&doc, "id = ?", documentID).Error; err != nil {
+		return "", "", "", err
+	}
+	if strings.TrimSpace(doc.FileKey) == "" {
+		return "", "", "", fmt.Errorf("documento sem arquivo original")
+	}
+
+	obj, err := config.MinioClient.GetObject(context.Background(), config.MinioBucket, config.ResolveObjectName(doc.FileKey), minio.GetObjectOptions{})
+	if err != nil {
+		return "", "", "", fmt.Errorf("falha ao baixar PDF original: %w", err)
+	}
+	defer obj.Close()
+
+	originalBytes, err := io.ReadAll(obj)
+	if err != nil {
+		return "", "", "", fmt.Errorf("falha ao ler PDF original: %w", err)
+	}
+
+	var signers []models.Signer
+	_ = config.DB.Where("document_id = ?", documentID).Order("sign_order asc").Find(&signers).Error
+	var fields []models.DocumentField
+	_ = config.DB.Where("document_id = ?", documentID).Order("page asc").Find(&fields).Error
+	var validations []models.ValidationStep
+	_ = config.DB.Where("document_id = ?", documentID).Order(`"order" asc`).Find(&validations).Error
+	var signatures []models.Signature
+	_ = config.DB.Where("document_id = ?", documentID).Order("created_at asc").Find(&signatures).Error
+
+	evidencePayload := map[string]any{
+		"document_id":       documentID.String(),
+		"gerado_em":         time.Now().UTC().Format(time.RFC3339),
+		"arquivo_original":  doc.FileKey,
+		"signatarios":       signers,
+		"campos":            fields,
+		"validacoes":        validations,
+		"assinaturas":       signatures,
+		"observacao":        "Evidências geradas automaticamente no fechamento da assinatura.",
+		"algoritmo_assinato": "SHA-256",
+	}
+	evidenceBytes, _ := json.MarshalIndent(evidencePayload, "", "  ")
+
+	hashInput := make([]byte, 0, len(originalBytes)+len(evidenceBytes))
+	hashInput = append(hashInput, originalBytes...)
+	hashInput = append(hashInput, evidenceBytes...)
+	hashBytes := sha256.Sum256(hashInput)
+	finalHash := hex.EncodeToString(hashBytes[:])
+
+	timestamp := time.Now().UTC().Format("20060102150405")
+	finalFileKey := "documento-final/" + documentID.String() + "/final_" + timestamp + ".pdf"
+	evidenceKey := "documento-final/" + documentID.String() + "/evidencias_" + timestamp + ".json"
+
+	if err := config.UploadToMinio(config.MinioBucket, finalFileKey, originalBytes, int64(len(originalBytes)), "application/pdf"); err != nil {
+		return "", "", "", fmt.Errorf("falha ao publicar PDF final: %w", err)
+	}
+	if err := config.UploadToMinio(config.MinioBucket, evidenceKey, evidenceBytes, int64(len(evidenceBytes)), "application/json"); err != nil {
+		return "", "", "", fmt.Errorf("falha ao publicar evidências: %w", err)
+	}
+
+	details := fmt.Sprintf("Documento final publicado em %s; evidencias=%s; hash_sha256=%s", finalFileKey, evidenceKey, finalHash)
+	config.DB.Create(&models.AuditEntry{
+		DocumentID: documentID,
+		Action:     "document_final_generated",
+		Actor:      "System",
+		Details:    details,
+		Timestamp:  time.Now(),
+	})
+
+	return finalHash, finalFileKey, evidenceKey, nil
 }

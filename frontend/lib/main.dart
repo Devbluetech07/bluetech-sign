@@ -5,24 +5,17 @@ import 'core/app_theme.dart';
 
 import 'presentation/auth/login_page.dart';
 import 'presentation/layouts/main_layout.dart';
-import 'presentation/layouts/admin_layout.dart';
-import 'presentation/dashboard/dashboard_page.dart';
 import 'presentation/document_flow/document_flow_page.dart';
 import 'presentation/signing/public_signing_page.dart';
-
-import 'presentation/admin/admin_dashboard.dart';
-import 'presentation/admin/admin_companies.dart';
-import 'presentation/admin/admin_company_details.dart';
-import 'presentation/admin/admin_settings.dart';
 
 // Import de Placeholder Pages (serão criadas a seguir)
 import 'presentation/documents/documents_page.dart';
 import 'presentation/documents/document_detail_page.dart';
+import 'presentation/documents/document_editor_page.dart';
 import 'presentation/integrations/integrations_page.dart';
 import 'presentation/folders/folders_page.dart';
 import 'presentation/templates/templates_page.dart';
 import 'presentation/contacts/contacts_page.dart';
-import 'presentation/bulk_send/bulk_send_page.dart';
 import 'presentation/analytics/analytics_page.dart';
 import 'presentation/team/team_page.dart';
 import 'presentation/departments/departments_page.dart';
@@ -57,43 +50,14 @@ final GoRouter _router = GoRouter(
         return PublicSigningPage(token: token);
       },
     ),
-    ShellRoute(
-      navigatorKey: GlobalKey<NavigatorState>(),
-      builder: (context, state, child) {
-        return AdminLayout(child: child);
-      },
-      routes: [
-        GoRoute(
-          path: '/admin/dashboard',
-          builder: (context, state) => const AdminDashboardPage(),
-        ),
-        GoRoute(
-          path: '/admin/companies',
-          builder: (context, state) => const AdminCompaniesPage(),
-        ),
-        GoRoute(
-          path: '/admin/companies/:id',
-          builder: (context, state) {
-            final id = state.pathParameters['id']!;
-            return AdminCompanyDetailsPage(companyId: id);
-          },
-        ),
-        GoRoute(
-          path: '/admin/settings',
-          builder: (context, state) => const AdminSettingsPage(),
-        ),
-      ],
-    ),
+    GoRoute(path: '/admin/:rest(.*)', redirect: (context, state) => '/login'),
     ShellRoute(
       navigatorKey: _shellNavigatorKey,
       builder: (context, state, child) {
         return MainLayout(child: child);
       },
       routes: [
-        GoRoute(
-          path: '/dashboard',
-          redirect: (context, state) => '/documents',
-        ),
+        GoRoute(path: '/dashboard', redirect: (context, state) => '/documents'),
         GoRoute(
           path: '/documents',
           builder: (context, state) => const DocumentsPage(),
@@ -103,6 +67,13 @@ final GoRouter _router = GoRouter(
           builder: (context, state) {
             final id = state.pathParameters['id']!;
             return DocumentDetailPage(documentId: id);
+          },
+        ),
+        GoRoute(
+          path: '/documents/:id/editor',
+          builder: (context, state) {
+            final id = state.pathParameters['id']!;
+            return DocumentEditorPage(documentId: id);
           },
         ),
         GoRoute(
@@ -120,10 +91,6 @@ final GoRouter _router = GoRouter(
         GoRoute(
           path: '/contacts',
           builder: (context, state) => const ContactsPage(),
-        ),
-        GoRoute(
-          path: '/bulk-send',
-          builder: (context, state) => const BulkSendPage(),
         ),
         GoRoute(
           path: '/analytics',

@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -95,6 +96,10 @@ func UploadDocument(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Arquivo é obrigatório"})
 	}
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if ext != ".pdf" {
+		return c.Status(400).JSON(fiber.Map{"error": "Apenas arquivos PDF são permitidos"})
+	}
 
 	docName := c.FormValue("name")
 	if docName == "" {
@@ -112,7 +117,6 @@ func UploadDocument(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": "Falha ao copiar arquivo"})
 	}
 
-	ext := filepath.Ext(fileHeader.Filename)
 	key := "documento/" + companyID.String() + "/" + uuid.NewString() + ext
 
 	err = config.UploadToMinio(config.MinioBucket, key, buf.Bytes(), fileHeader.Size, "application/pdf")
@@ -324,17 +328,22 @@ func SendDocument(c *fiber.Ctx) error {
 
 	sentCount := 0
 	failedEmails := make([]string, 0)
+	failedInvites := make([]fiber.Map, 0)
 	for _, s := range doc.Signers {
 		if doc.SequentialFlow && s.SignOrder > 1 {
+			continue
+		}
+		if err := sendSigningInviteEmail(doc, s, "Você recebeu um novo documento para assinatura."); err != nil {
+			failedEmails = append(failedEmails, s.Email)
+			failedInvites = append(failedInvites, fiber.Map{
+				"email": s.Email,
+				"link":  buildSigningLink(s.AccessToken.String()),
+			})
 			continue
 		}
 		s.Status = "sent"
 		s.NotifiedAt = &now
 		config.DB.Save(&s)
-		if err := sendSigningInviteEmail(doc, s, "Você recebeu um novo documento para assinatura."); err != nil {
-			failedEmails = append(failedEmails, s.Email)
-			continue
-		}
 		sentCount++
 	}
 
@@ -347,10 +356,11 @@ func SendDocument(c *fiber.Ctx) error {
 	})
 
 	return c.JSON(fiber.Map{
-		"message":       "Documento enviado para os signatários",
-		"status":        "in_progress",
-		"emails_sent":   sentCount,
-		"emails_failed": failedEmails,
+		"message":                "Documento processado para envio",
+		"status":                 "in_progress",
+		"emails_sent":            sentCount,
+		"emails_failed":          failedEmails,
+		"signing_links_fallback": failedInvites,
 	})
 }
 
@@ -378,8 +388,97 @@ func AddDocumentFields(c *fiber.Ctx) error {
 		return c.Status(400).JSON(fiber.Map{"error": "Informe os campos do documento"})
 	}
 
-	fields := make([]models.DocumentField, 0, len(req.Fields))
-	for _, item := range req.Fields {
+	fields := buildDocumentFieldsFromRequest(docID, req.Fields)
+
+	if len(fields) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Nenhum campo válido foi informado"})
+	}
+
+	if err := config.DB.Where("document_id = ?", docID).Delete(&models.DocumentField{}).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao limpar campos anteriores"})
+	}
+
+	if err := config.DB.Create(&fields).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao salvar campos"})
+	}
+
+	return c.Status(201).JSON(fiber.Map{"fields_count": len(fields)})
+}
+
+func GetDocumentFields(c *fiber.Ctx) error {
+	docID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "ID de documento inválido"})
+	}
+
+	var fields []models.DocumentField
+	if err := config.DB.Where("document_id = ?", docID).Order("page asc").Find(&fields).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao buscar campos do documento"})
+	}
+
+	return c.JSON(fiber.Map{
+		"document_id": docID,
+		"fields":      fields,
+		"count":       len(fields),
+	})
+}
+
+func UpdateDocumentFields(c *fiber.Ctx) error {
+	docID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "ID de documento inválido"})
+	}
+
+	var req AddFieldsBatchReq
+	if err := c.BodyParser(&req); err != nil || len(req.Fields) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Informe os campos do documento"})
+	}
+
+	fields := buildDocumentFieldsFromRequest(docID, req.Fields)
+	if len(fields) == 0 {
+		return c.Status(400).JSON(fiber.Map{"error": "Nenhum campo válido foi informado"})
+	}
+
+	if err := config.DB.Where("document_id = ?", docID).Delete(&models.DocumentField{}).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao limpar campos anteriores"})
+	}
+	if err := config.DB.Create(&fields).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao atualizar campos"})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":      "Campos atualizados com sucesso",
+		"fields_count": len(fields),
+	})
+}
+
+func DeleteDocumentFields(c *fiber.Ctx) error {
+	docID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "ID de documento inválido"})
+	}
+
+	fieldIDStr := strings.TrimSpace(c.Query("field_id"))
+	if fieldIDStr != "" {
+		fieldID, parseErr := uuid.Parse(fieldIDStr)
+		if parseErr != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "ID de campo inválido"})
+		}
+		if err := config.DB.Where("id = ? AND document_id = ?", fieldID, docID).Delete(&models.DocumentField{}).Error; err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "Falha ao remover campo"})
+		}
+		return c.JSON(fiber.Map{"message": "Campo removido com sucesso"})
+	}
+
+	if err := config.DB.Where("document_id = ?", docID).Delete(&models.DocumentField{}).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao remover campos"})
+	}
+	return c.JSON(fiber.Map{"message": "Campos removidos com sucesso"})
+}
+
+func buildDocumentFieldsFromRequest(docID uuid.UUID, reqFields []AddFieldReq) []models.DocumentField {
+	fields := make([]models.DocumentField, 0, len(reqFields))
+	for _, item := range reqFields {
 		if strings.TrimSpace(item.FieldType) == "" || item.Page <= 0 {
 			continue
 		}
@@ -404,20 +503,7 @@ func AddDocumentFields(c *fiber.Ctx) error {
 			Value:      item.Value,
 		})
 	}
-
-	if len(fields) == 0 {
-		return c.Status(400).JSON(fiber.Map{"error": "Nenhum campo válido foi informado"})
-	}
-
-	if err := config.DB.Where("document_id = ?", docID).Delete(&models.DocumentField{}).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Falha ao limpar campos anteriores"})
-	}
-
-	if err := config.DB.Create(&fields).Error; err != nil {
-		return c.Status(500).JSON(fiber.Map{"error": "Falha ao salvar campos"})
-	}
-
-	return c.Status(201).JSON(fiber.Map{"fields_count": len(fields)})
+	return fields
 }
 
 func CreateValidationSteps(c *fiber.Ctx) error {
@@ -524,15 +610,20 @@ func ResendDocument(c *fiber.Ctx) error {
 	now := time.Now()
 	sentCount := 0
 	failedEmails := make([]string, 0)
+	failedInvites := make([]fiber.Map, 0)
 	for _, s := range doc.Signers {
 		if s.Status != "signed" {
+			if err := sendSigningInviteEmail(doc, s, "Este é um reenvio do convite para assinatura."); err != nil {
+				failedEmails = append(failedEmails, s.Email)
+				failedInvites = append(failedInvites, fiber.Map{
+					"email": s.Email,
+					"link":  buildSigningLink(s.AccessToken.String()),
+				})
+				continue
+			}
 			s.Status = "sent"
 			s.NotifiedAt = &now
 			config.DB.Save(&s)
-			if err := sendSigningInviteEmail(doc, s, "Este é um reenvio do convite para assinatura."); err != nil {
-				failedEmails = append(failedEmails, s.Email)
-				continue
-			}
 			sentCount++
 		}
 	}
@@ -544,10 +635,20 @@ func ResendDocument(c *fiber.Ctx) error {
 		Timestamp:  now,
 	})
 	return c.JSON(fiber.Map{
-		"message":       "Documento reenviado",
-		"emails_sent":   sentCount,
-		"emails_failed": failedEmails,
+		"message":                "Documento processado para reenvio",
+		"emails_sent":            sentCount,
+		"emails_failed":          failedEmails,
+		"signing_links_fallback": failedInvites,
 	})
+}
+
+func buildSigningLink(token string) string {
+	base := strings.TrimSpace(os.Getenv("FRONTEND_URL"))
+	if base == "" {
+		base = "http://localhost:4100"
+	}
+	base = strings.TrimRight(base, "/")
+	return base + "/sign/" + token
 }
 
 func DownloadDocumentByID(c *fiber.Ctx) error {
@@ -563,8 +664,12 @@ func DownloadDocumentByID(c *fiber.Ctx) error {
 	if strings.TrimSpace(doc.FileKey) == "" {
 		return c.Status(404).JSON(fiber.Map{"error": "Arquivo não vinculado ao documento"})
 	}
+	fileKey := doc.FileKey
+	if doc.Status == "completed" && strings.TrimSpace(doc.SignedFileKey) != "" {
+		fileKey = doc.SignedFileKey
+	}
 
-	object, err := config.MinioClient.GetObject(context.Background(), config.MinioBucket, doc.FileKey, minio.GetObjectOptions{})
+	object, err := config.MinioClient.GetObject(context.Background(), config.MinioBucket, config.ResolveObjectName(fileKey), minio.GetObjectOptions{})
 	if err != nil {
 		return c.Status(500).JSON(fiber.Map{"error": "Falha ao acessar arquivo no storage"})
 	}

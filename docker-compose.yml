@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ---------------------------------------------------------------------------
   # POSTGRESQL (com pgvector)
@@ -54,29 +52,66 @@ services:
     ports:
       - "4101:3001"
     environment:
-      - DB_URL=postgres://root:rootpassword@postgres:5432/singproof?sslmode=disable
-      - MINIO_ENDPOINT=minio:29100
-      - MINIO_ACCESS_KEY=local-minio-key
-      - MINIO_SECRET_KEY=local-minio-secret
-      - MINIO_USE_SSL=false
-      - MINIO_BUCKET=bluetech-sign
-      - MINIO_PROJECT_FOLDER=singproof_v1
-      - API_PUBLIC_URL=http://localhost:4101
-      - FRONTEND_URL=http://localhost:4100
-      - EMAIL_FROM=SignProof <onboarding@resend.dev>
-      - RESEND_API_KEY=re_GSUAsU4K_LdnuBJNoRVsWGS6csbdNkbDs
-      - JWT_SECRET=valeris_super_secret_key_2026
-      - BLUETECH_GATEWAY_URL=http://host.docker.internal:3000
-      - BLUETECH_ASSINATURA_URL=http://host.docker.internal:3000/api/v1/assinatura
-      - BLUETECH_DOCUMENTO_URL=http://host.docker.internal:3000/api/v1/documento
-      - BLUETECH_SELFIE_DOC_URL=http://host.docker.internal:3000/api/v1/selfie-documento
-      - VALERIS_API_TOKEN=vl_312035606bc79810dce7fc61715b142b6b57a42f66702224d7b080a40232f788
+      - APP_ENV=${APP_ENV:-development}
+      - DB_URL=${DB_URL:-postgres://root:rootpassword@postgres:5432/singproof?sslmode=disable}
+      - DB_AUTO_MIGRATE=${DB_AUTO_MIGRATE:-true}
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-minio:29100}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-local-minio-key}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-local-minio-secret}
+      - MINIO_USE_SSL=${MINIO_USE_SSL:-false}
+      - MINIO_BUCKET=${MINIO_BUCKET:-bluetech-sign}
+      - MINIO_PROJECT_FOLDER=${MINIO_PROJECT_FOLDER:-singproof_v1}
+      - API_PUBLIC_URL=${API_PUBLIC_URL:-http://localhost:4101}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:4100}
+      - EMAIL_FROM=${EMAIL_FROM:-SignProof <onboarding@resend.dev>}
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - JWT_SECRET=${JWT_SECRET:-trocar_em_producao}
+      - VALERIS_API_TOKEN=${VALERIS_API_TOKEN:-vl_6c9ba69f076f4265fae820dbb8b0ac0cf3dcffb553d69ed320fcc486ba8d5773}
       - PORT=3001
     depends_on:
       postgres:
         condition: service_healthy
       minio:
         condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # MICROSSERVICOS GO (conversao do legado Node/TS)
+  # ---------------------------------------------------------------------------
+  ms-documento:
+    build:
+      context: ./ms-documento
+      dockerfile: Dockerfile
+    container_name: singproof-ms-documento
+    environment:
+      - PORT=3000
+      - MAIN_BACKEND_URL=http://backend:3001/api/v1/valeris/captures
+      - VALERIS_API_TOKEN=${VALERIS_API_TOKEN:-vl_6c9ba69f076f4265fae820dbb8b0ac0cf3dcffb553d69ed320fcc486ba8d5773}
+    depends_on:
+      - backend
+
+  ms-selfie:
+    build:
+      context: ./ms-selfie
+      dockerfile: Dockerfile
+    container_name: singproof-ms-selfie
+    environment:
+      - PORT=3000
+      - MAIN_BACKEND_URL=http://backend:3001/api/v1/valeris/captures
+      - VALERIS_API_TOKEN=${VALERIS_API_TOKEN:-vl_6c9ba69f076f4265fae820dbb8b0ac0cf3dcffb553d69ed320fcc486ba8d5773}
+    depends_on:
+      - backend
+
+  ms-selfie-documento:
+    build:
+      context: ./ms-selfie-documento
+      dockerfile: Dockerfile
+    container_name: singproof-ms-selfie-documento
+    environment:
+      - PORT=3000
+      - MAIN_BACKEND_URL=http://backend:3001/api/v1/valeris/captures
+      - VALERIS_API_TOKEN=${VALERIS_API_TOKEN:-vl_6c9ba69f076f4265fae820dbb8b0ac0cf3dcffb553d69ed320fcc486ba8d5773}
+    depends_on:
+      - backend
 
   # ---------------------------------------------------------------------------
   # NGINX FRONTEND + PROXY

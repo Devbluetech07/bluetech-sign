@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/gustavogomes000/singproof-go/models"
 	"gorm.io/driver/postgres"
@@ -27,29 +28,50 @@ func ConnectDB() {
 
 	log.Println("Conectado ao banco de dados com sucesso")
 
-	// Habilitar a extensão pgvector caso não exista
-	db.Exec("CREATE EXTENSION IF NOT EXISTS vector")
+	// Executa extensoes e migracoes SQL versionadas.
+	queryExtensao, err := os.ReadFile("internal/infraestrutura/repositorio/consultas/habilitar_extensao_vector.sql")
+	if err != nil {
+		log.Fatal("Falha ao ler SQL de extensoes: ", err)
+	}
+	if err := db.Exec(string(queryExtensao)).Error; err != nil {
+		log.Fatal("Falha ao habilitar extensoes: ", err)
+	}
 
-	log.Println("Rodando AutoMigrate...")
-	db.AutoMigrate(
-		&models.Company{},
-		&models.User{},
-		&models.Document{},
-		&models.Signer{},
-		&models.DocumentField{},
-		&models.ValidationStep{},
-		&models.AuditEntry{},
-		&models.Signature{},
-		&models.ValerisCapture{},
-		&models.ApiKey{},
-		&models.Contact{},
-		&models.Template{},
-		&models.Department{},
-		&models.Profile{},
-		&models.UserPermission{},
-		&models.Webhook{},
-		&models.WebhookDelivery{},
-	)
+	if err := RunSQLMigrations(db, "internal/infraestrutura/banco/migracoes"); err != nil {
+		log.Fatal("Falha ao executar migracoes SQL: ", err)
+	}
+
+	// Evita dependencia total de AutoMigrate em producao.
+	appEnv := strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))
+	autoMigrate := strings.EqualFold(os.Getenv("DB_AUTO_MIGRATE"), "true")
+	if appEnv != "production" && os.Getenv("DB_AUTO_MIGRATE") == "" {
+		autoMigrate = true
+	}
+	if autoMigrate {
+		log.Println("Rodando AutoMigrate...")
+		db.AutoMigrate(
+			&models.Company{},
+			&models.User{},
+			&models.Document{},
+			&models.Signer{},
+			&models.DocumentField{},
+			&models.ValidationStep{},
+			&models.AuditEntry{},
+			&models.Signature{},
+			&models.ValerisCapture{},
+			&models.ApiKey{},
+			&models.Contact{},
+			&models.Template{},
+			&models.Department{},
+			&models.Profile{},
+			&models.CompanyExternalCollaborator{},
+			&models.UserPermission{},
+			&models.Webhook{},
+			&models.WebhookDelivery{},
+		)
+	} else {
+		log.Println("AutoMigrate desabilitado para este ambiente")
+	}
 
 	DB = db
 }

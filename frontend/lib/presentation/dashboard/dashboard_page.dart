@@ -51,8 +51,12 @@ class _DashboardPageState extends State<DashboardPage> {
           recentDocs = docs.take(3).toList(); // Pega apenas os 3 mais recentes pro dash
         });
       }
-    } catch(e) {
-      debugPrint("Erro dashboard: \$e");
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro ao carregar dashboard')),
+        );
+      }
     }
   }
 

@@ -18,10 +18,7 @@ func UploadToMinio(bucketName, objectName string, data []byte, size int64, conte
 	ctx := context.Background()
 
 	// Prepend project folder if set
-	finalPath := objectName
-	if MinioProjectFolder != "" {
-		finalPath = MinioProjectFolder + "/" + objectName
-	}
+	finalPath := ResolveObjectName(objectName)
 	exists, err := MinioClient.BucketExists(ctx, bucketName)
 	if err == nil && !exists {
 		MinioClient.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
@@ -31,6 +28,13 @@ func UploadToMinio(bucketName, objectName string, data []byte, size int64, conte
 		ContentType: contentType,
 	})
 	return err
+}
+
+func ResolveObjectName(objectName string) string {
+	if MinioProjectFolder == "" {
+		return objectName
+	}
+	return MinioProjectFolder + "/" + objectName
 }
 
 func ConnectMinio() {

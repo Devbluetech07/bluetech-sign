@@ -67,9 +67,34 @@ class _DocumentDetailPageState extends State<DocumentDetailPage> {
     );
     if (!mounted) return;
     if (res.statusCode >= 200 && res.statusCode < 300) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Ação "$action" executada')));
+      final body = jsonDecode(res.body) as Map<String, dynamic>;
+      final sent = (body['emails_sent'] as num?)?.toInt();
+      final failedRaw = body['emails_failed'] as List<dynamic>? ?? [];
+      final fallbackLinksRaw =
+          body['signing_links_fallback'] as List<dynamic>? ?? [];
+      final fallbackLinks = fallbackLinksRaw
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      String feedback = 'Ação "$action" executada';
+      Color feedbackColor = AppTheme.tealNeon;
+      if (sent != null || failedRaw.isNotEmpty) {
+        feedback =
+            'Envio: ${sent ?? 0} enviado(s), ${failedRaw.length} falha(s)';
+      }
+      if (failedRaw.isNotEmpty) {
+        feedbackColor = Colors.orangeAccent;
+        final firstLink = fallbackLinks.isNotEmpty
+            ? (fallbackLinks.first['link'] ?? '').toString()
+            : '';
+        if (firstLink.isNotEmpty) {
+          Clipboard.setData(ClipboardData(text: firstLink));
+          feedback = '$feedback. Link de assinatura copiado.';
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(feedback), backgroundColor: feedbackColor),
+      );
       _fetch();
     } else {
       ScaffoldMessenger.of(
@@ -240,6 +265,15 @@ class _DocumentDetailPageState extends State<DocumentDetailPage> {
     final signers = (doc['Signers'] as List<dynamic>? ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
+    String firstPendingSignerToken = '';
+    for (final signer in signers) {
+      final status = (signer['Status'] ?? '').toString();
+      final token = (signer['AccessToken'] ?? '').toString();
+      if (status != 'signed' && token.isNotEmpty) {
+        firstPendingSignerToken = token;
+        break;
+      }
+    }
     final audits = (_data?['audit_entries'] as List<dynamic>? ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
@@ -265,8 +299,21 @@ class _DocumentDetailPageState extends State<DocumentDetailPage> {
                     const Spacer(),
                     OutlinedButton.icon(
                       onPressed: () {
+                        final token = firstPendingSignerToken;
+                        if (token.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Nenhum link disponível para cópia',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         Clipboard.setData(
-                          ClipboardData(text: '${ApiConfig.baseUrl}/sign/TOKEN_HERE'),
+                          ClipboardData(
+                            text: '${ApiConfig.baseUrl}/sign/$token',
+                          ),
                         );
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Link copiado')),
@@ -274,6 +321,14 @@ class _DocumentDetailPageState extends State<DocumentDetailPage> {
                       },
                       icon: const Icon(LucideIcons.copy, size: 14),
                       label: const Text('Copiar link'),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => context.push(
+                        '/documents/${widget.documentId}/editor',
+                      ),
+                      icon: const Icon(LucideIcons.edit3, size: 14),
+                      label: const Text('Editar campos'),
                     ),
                     const SizedBox(width: 8),
                     OutlinedButton.icon(
@@ -518,23 +573,47 @@ class _DocumentDetailPageState extends State<DocumentDetailPage> {
                                                   ),
                                                 ),
                                               ),
-                                              if (st != 'signed' && s['AccessToken'] != null) ...[
+                                              if (st != 'signed' &&
+                                                  s['AccessToken'] != null) ...[
                                                 const SizedBox(height: 4),
                                                 InkWell(
                                                   onTap: () {
-                                                    final token = s['AccessToken'].toString();
+                                                    final token =
+                                                        s['AccessToken']
+                                                            .toString();
                                                     Clipboard.setData(
-                                                      ClipboardData(text: '${ApiConfig.baseUrl}/sign/$token'),
+                                                      ClipboardData(
+                                                        text:
+                                                            '${ApiConfig.baseUrl}/sign/$token',
+                                                      ),
                                                     );
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(content: Text('Link de assinatura copiado!')),
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'Link de assinatura copiado!',
+                                                        ),
+                                                      ),
                                                     );
                                                   },
                                                   child: const Row(
                                                     children: [
-                                                      Icon(LucideIcons.link, size: 12, color: AppTheme.tealNeon),
+                                                      Icon(
+                                                        LucideIcons.link,
+                                                        size: 12,
+                                                        color:
+                                                            AppTheme.tealNeon,
+                                                      ),
                                                       SizedBox(width: 4),
-                                                      Text('Copiar link', style: TextStyle(fontSize: 11, color: AppTheme.tealNeon)),
+                                                      Text(
+                                                        'Copiar link',
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color:
+                                                              AppTheme.tealNeon,
+                                                        ),
+                                                      ),
                                                     ],
                                                   ),
                                                 ),

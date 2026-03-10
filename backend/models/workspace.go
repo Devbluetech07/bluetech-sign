@@ -46,16 +46,39 @@ type Department struct {
 }
 
 type Profile struct {
-	ID           uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
-	UserID       uuid.UUID `gorm:"type:uuid;not null;uniqueIndex"`
-	CompanyID    uuid.UUID `gorm:"type:uuid;not null;index"`
-	FullName     string
-	Hierarchy    string     `gorm:"default:'user'"` // owner | gestor | user
-	DepartmentID *uuid.UUID `gorm:"type:uuid"`
-	Active       bool       `gorm:"default:true"`
-	AvatarURL    string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID                     uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	UserID                 uuid.UUID `gorm:"type:uuid;not null;uniqueIndex"`
+	CompanyID              uuid.UUID `gorm:"type:uuid;not null;index"`
+	FullName               string
+	Hierarchy              string     `gorm:"default:'user'"` // owner | gestor | user
+	DepartmentID           *uuid.UUID `gorm:"type:uuid"`
+	ExternalCollaboratorID *int64
+	ExternalDepartmentID   *int64
+	ExternalDepartmentName string
+	ExternalCargoID        *int64
+	ExternalCargoName      string
+	Active                 bool `gorm:"default:true"`
+	AvatarURL              string
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
+}
+
+type CompanyExternalCollaborator struct {
+	ID                     uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	CompanyID              uuid.UUID `gorm:"type:uuid;not null;index:idx_company_external_collaborators_company"`
+	ExternalCollaboratorID int64     `gorm:"not null;index:uidx_company_external_collaborator,unique"`
+	ExternalDepartmentID   *int64
+	ExternalDepartmentName string
+	FullName               string `gorm:"not null"`
+	Email                  string `gorm:"index:idx_company_external_collaborators_email"`
+	Status                 string
+	PhotoURL               string
+	CargoID                *int64
+	CargoName              string
+	RawPayload             string `gorm:"type:text"`
+	SyncedAt               time.Time
+	CreatedAt              time.Time
+	UpdatedAt              time.Time
 }
 
 type UserPermission struct {

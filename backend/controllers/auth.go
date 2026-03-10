@@ -2,10 +2,12 @@ package controllers
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/gustavogomes000/singproof-go/config"
 	"github.com/gustavogomes000/singproof-go/models"
 	"golang.org/x/crypto/bcrypt"
@@ -21,6 +23,8 @@ func Login(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Password = strings.TrimSpace(req.Password)
 
 	// Admin Hardcoded (Super Admin fallback)
 	if req.Email == "admin@valeris.com" && req.Password == "admin123" {
@@ -83,6 +87,9 @@ func Register(c *fiber.Ctx) error {
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid body"})
 	}
+	req.Email = strings.ToLower(strings.TrimSpace(req.Email))
+	req.Password = strings.TrimSpace(req.Password)
+	req.CompanyName = strings.TrimSpace(req.CompanyName)
 
 	// Checa se o usuário existe
 	var existing models.User
@@ -91,24 +98,32 @@ func Register(c *fiber.Ctx) error {
 	}
 
 	// Cria Empresa
+	cnpjGerado := uuid.New().String()
 	company := models.Company{
+		ID:   uuid.New(),
 		Name: req.CompanyName,
+		CNPJ: cnpjGerado,
 		Plan: "starter",
 	}
-	config.DB.Create(&company)
+	if err := config.DB.Create(&company).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao criar empresa"})
+	}
 
 	// Hash Senha
 	hashedPass, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 
 	// Cria Usuário Owner
 	user := models.User{
+		ID:        uuid.New(),
 		Email:     req.Email,
 		Password:  string(hashedPass),
 		Role:      "owner",
 		CompanyID: &company.ID,
 	}
 
-	config.DB.Create(&user)
+	if err := config.DB.Create(&user).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Falha ao criar usuário"})
+	}
 
 	return c.Status(fiber.StatusCreated).JSON(fiber.Map{
 		"message":    "Registrado com sucesso",

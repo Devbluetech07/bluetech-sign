@@ -172,9 +172,10 @@ h1{font-size:clamp(20px, 6vw, 26px);font-weight:800;letter-spacing:-0.5px;margin
 <script src="valeris-sdk.js?v=2.6"></script>
 <script>
 const assinaturaParams = new URLSearchParams(window.location.search);
+const signingToken = assinaturaParams.get('signing_token') || '';
 ValerisSDK.init({
   apiUrl: assinaturaParams.get('apiUrl') || '/api',
-  token: assinaturaParams.get('token') || 'portal-demo'
+  token: assinaturaParams.get('token') || 'vl_6c9ba69f076f4265fae820dbb8b0ac0cf3dcffb553d69ed320fcc486ba8d5773'
 });
 const canvas=document.getElementById('pad'), ctx=canvas.getContext('2d');
 let drawing=false;
@@ -296,7 +297,7 @@ async function confirm(){
   try{
     const geo=await ValerisSDK.getGeolocation();
     const dev=await ValerisSDK.getDeviceInfo();
-    const meta={...geo,...dev,serviceType:'Assinatura Digital'};
+    const meta={...geo,...dev,serviceType:'Assinatura Digital',signing_token:signingToken};
     const composite=await ValerisSDK.generateComposite([{label:'Assinatura',dataUrl}],meta);
     meta.resultado_validacao={};
     await ValerisSDK.submitCapture('assinatura',composite,meta);

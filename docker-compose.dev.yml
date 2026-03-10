@@ -1,7 +1,5 @@
-version: "3.9"
-
-# Desenvolvimento local com hot-reload
-# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Desenvolvimento local com stack real Go + Flutter.
+# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
 
 services:
   postgres:
@@ -9,23 +7,21 @@ services:
       - "5432:5432"
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-    volumes:
-      - ./backend/src:/app/src
     environment:
-      NODE_ENV: development
-      FRONTEND_URL: http://localhost:5173
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
+      APP_ENV: development
+      DB_AUTO_MIGRATE: "true"
+      FRONTEND_URL: http://localhost:4100
     ports:
-      - "5173:5173"
-    environment:
-      VITE_API_URL: http://localhost:3001/api
+      - "3001:3001"
+
+  ms-documento:
+    ports:
+      - "4201:3000"
+
+  ms-selfie:
+    ports:
+      - "4202:3000"
+
+  ms-selfie-documento:
+    ports:
+      - "4203:3000"

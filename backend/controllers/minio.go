@@ -43,7 +43,7 @@ func DownloadDocumentFile(c *fiber.Ctx) error {
 	objectName := c.Params("filename")
 
 	ctx := context.Background()
-	obj, err := config.MinioClient.GetObject(ctx, config.MinioBucket, objectName, minio.GetObjectOptions{})
+	obj, err := config.MinioClient.GetObject(ctx, config.MinioBucket, config.ResolveObjectName(objectName), minio.GetObjectOptions{})
 	if err != nil {
 		return c.Status(404).JSON(fiber.Map{"error": "Arquivo não encontrado"})
 	}

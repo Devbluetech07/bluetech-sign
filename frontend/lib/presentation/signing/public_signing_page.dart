@@ -6,6 +6,7 @@ import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import '../../core/api_config.dart';
 import 'dart:convert';
 import '../../core/app_theme.dart';
+import '../../core/open_external_url.dart';
 import '../widgets/glass_container.dart';
 import '../microservices/valeris_frame.dart';
 
@@ -20,14 +21,15 @@ class PublicSigningPage extends StatefulWidget {
 class _PublicSigningPageState extends State<PublicSigningPage> {
   String _state =
       'loading'; // loading | document | validation | complete | error
-  bool _isSendingCode = false;
   Map<String, dynamic>? _docData;
   String? _error;
   bool _isFinishingStep = false;
+  bool _isLoadingPdf = false;
+  Uint8List? _pdfBytes;
+  String? _pdfLoadError;
 
   final TextEditingController _typedSignatureController =
       TextEditingController();
-  final TextEditingController _tokenController = TextEditingController();
 
   @override
   void initState() {
@@ -38,9 +40,12 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
   String get _valerisToken {
     const token = String.fromEnvironment(
       'VALERIS_API_TOKEN',
-      defaultValue: 'portal-demo',
+      defaultValue:
+          'vl_6c9ba69f076f4265fae820dbb8b0ac0cf3dcffb553d69ed320fcc486ba8d5773',
     );
-    return token.trim().isEmpty ? 'portal-demo' : token.trim();
+    return token.trim().isEmpty
+        ? 'vl_6c9ba69f076f4265fae820dbb8b0ac0cf3dcffb553d69ed320fcc486ba8d5773'
+        : token.trim();
   }
 
   String _valerisCaptureApiUrl() {
@@ -53,6 +58,7 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
       queryParameters: {
         'apiUrl': _valerisCaptureApiUrl(),
         'token': _valerisToken,
+        'signing_token': widget.token,
       },
     );
     final origin = kIsWeb ? Uri.base.origin : ApiConfig.baseUrl;
@@ -106,6 +112,7 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
             _state = 'document';
           }
         });
+        await _loadPdfBytes(body);
       } else {
         setState(() {
           _error = jsonDecode(res.body)['error'] ?? 'Erro desconhecido';
@@ -120,21 +127,52 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
     }
   }
 
-  Future<void> _requestVerificationToken() async {
-    setState(() => _isSendingCode = true);
+  Future<void> _loadPdfBytes(Map<String, dynamic> sourceData) async {
+    final document = Map<String, dynamic>.from(
+      (sourceData['document'] ?? {}) as Map,
+    );
+    final fileUrl = document['file_url']?.toString();
+    final resolvedUrl = _resolvePdfUrl(fileUrl);
+
+    if (resolvedUrl == null) {
+      if (!mounted) return;
+      setState(() {
+        _pdfBytes = null;
+        _pdfLoadError = 'Documento indisponível';
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isLoadingPdf = true;
+      _pdfLoadError = null;
+    });
+
     try {
-      await http.post(
-        Uri.parse(
-          '${ApiConfig.baseUrl}/api/v1/signing/${widget.token}/request-token',
-        ),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Código enviado por e-mail!')),
-        );
+      final response = await http.get(Uri.parse(resolvedUrl));
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _pdfBytes = response.bodyBytes;
+        });
+      } else {
+        if (!mounted) return;
+        setState(() {
+          _pdfBytes = null;
+          _pdfLoadError = 'Falha ao carregar PDF (${response.statusCode})';
+        });
       }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _pdfBytes = null;
+        _pdfLoadError = 'Erro ao carregar PDF: $e';
+      });
     } finally {
-      if (mounted) setState(() => _isSendingCode = false);
+      if (mounted) {
+        setState(() => _isLoadingPdf = false);
+      }
     }
   }
 
@@ -332,8 +370,39 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
 
   Future<void> _signDocument() async {
     try {
+      final fields = (_docData?['fields'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      final pendingFields = fields
+          .where((f) => (f['Value'] ?? '').toString().trim().isEmpty)
+          .length;
+      final validations =
+          (_docData?['validation_steps'] as List<dynamic>? ?? [])
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+      final pendingValidations = validations
+          .where((v) => (v['Status'] ?? '') != 'completed')
+          .length;
+      if (pendingFields > 0 || pendingValidations > 0) {
+        if (mounted) {
+          final pendencias = <String>[
+            if (pendingFields > 0) '$pendingFields campo(s)',
+            if (pendingValidations > 0) '$pendingValidations validação(ões)',
+          ].join(' e ');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Finalize as pendências antes de concluir: $pendencias.',
+              ),
+              backgroundColor: Colors.orangeAccent,
+            ),
+          );
+        }
+        return;
+      }
+
       final payload = {
-        'token_code': _tokenController.text,
+        'token_code': '',
         'signature_data': {'image': ''},
       };
 
@@ -379,12 +448,23 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
     }
   }
 
-  Widget _buildPdfView(List<Map<String, dynamic>> fields, Map<String, dynamic> signer) {
-    final fileUrl = _docData?['file_url'] as String?;
-    final fullUrl = fileUrl != null ? '${ApiConfig.baseUrl}$fileUrl' : null;
+  Widget _buildPdfView(
+    List<Map<String, dynamic>> fields,
+    Map<String, dynamic> signer,
+  ) {
+    final document = Map<String, dynamic>.from(
+      (_docData?['document'] ?? {}) as Map,
+    );
+    final fileUrl = document['file_url']?.toString();
+    final fullUrl = _resolvePdfUrl(fileUrl);
 
     if (fullUrl == null) {
-      return const Center(child: Text('Documento indisponível', style: TextStyle(color: Colors.white)));
+      return const Center(
+        child: Text(
+          'Documento indisponível',
+          style: TextStyle(color: Colors.white),
+        ),
+      );
     }
 
     return Container(
@@ -395,13 +475,41 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
       ),
       child: Stack(
         children: [
-          SfPdfViewer.network(
-            fullUrl,
-            canShowScrollHead: false,
-            canShowScrollStatus: false,
-            enableDoubleTapZooming: false,
-            pageLayoutMode: PdfPageLayoutMode.single,
-          ),
+          if (_isLoadingPdf)
+            const Center(
+              child: CircularProgressIndicator(color: AppTheme.tealNeon),
+            )
+          else if (_pdfBytes != null && _pdfBytes!.isNotEmpty)
+            SfPdfViewer.memory(
+              _pdfBytes!,
+              canShowScrollHead: false,
+              canShowScrollStatus: false,
+              enableDoubleTapZooming: false,
+              pageLayoutMode: PdfPageLayoutMode.single,
+            )
+          else
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _pdfLoadError ?? 'Não foi possível carregar o documento',
+                    style: const TextStyle(color: Colors.white70),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      if (_docData != null) {
+                        _loadPdfBytes(_docData!);
+                      }
+                    },
+                    icon: const Icon(LucideIcons.refreshCcw),
+                    label: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
           Positioned.fill(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -412,13 +520,19 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
 
                 return Stack(
                   children: fields.map((field) {
-                     final isPending = (field['Value'] ?? '').toString().trim().isEmpty;
-                     final color = isPending ? AppTheme.tealNeon : Colors.greenAccent;
-                     
-                     final xRatio = (field['X'] as num?)?.toDouble() ?? 0.0;
-                     final yRatio = (field['Y'] as num?)?.toDouble() ?? 0.0;
-                     final wRatio = (field['Width'] as num?)?.toDouble() ?? 0.15;
-                     final hRatio = (field['Height'] as num?)?.toDouble() ?? 0.04;
+                    final isPending = (field['Value'] ?? '')
+                        .toString()
+                        .trim()
+                        .isEmpty;
+                    final color = isPending
+                        ? AppTheme.tealNeon
+                        : Colors.greenAccent;
+
+                    final xRatio = (field['X'] as num?)?.toDouble() ?? 0.0;
+                    final yRatio = (field['Y'] as num?)?.toDouble() ?? 0.0;
+                    final wRatio = (field['Width'] as num?)?.toDouble() ?? 0.15;
+                    final hRatio =
+                        (field['Height'] as num?)?.toDouble() ?? 0.04;
 
                     return Positioned(
                       left: xRatio * viewWidth,
@@ -430,7 +544,9 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
                         child: Container(
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: color.withOpacity(isPending ? 0.2 : 0.4),
+                            color: color.withValues(
+                              alpha: isPending ? 0.2 : 0.4,
+                            ),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(color: color, width: 2),
                           ),
@@ -455,12 +571,49 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
     );
   }
 
+  String? _resolvePdfUrl(String? fileUrl) {
+    if (fileUrl == null || fileUrl.trim().isEmpty) {
+      return null;
+    }
+    final normalized = fileUrl.trim();
+    if (normalized.startsWith('http://') || normalized.startsWith('https://')) {
+      if (kIsWeb) {
+        final parsed = Uri.tryParse(normalized);
+        if (parsed != null) {
+          return '${Uri.base.origin}${parsed.path}${parsed.hasQuery ? '?${parsed.query}' : ''}';
+        }
+      }
+      return normalized;
+    }
+    if (kIsWeb) {
+      return '${Uri.base.origin}$normalized';
+    }
+    return '${ApiConfig.baseUrl}$normalized';
+  }
+
+  void _openDownload() {
+    final document = Map<String, dynamic>.from(
+      (_docData?['document'] ?? {}) as Map,
+    );
+    final fileUrl = document['file_url']?.toString();
+    final resolvedUrl = _resolvePdfUrl(fileUrl);
+    if (resolvedUrl == null || resolvedUrl.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link de download indisponível')),
+      );
+      return;
+    }
+    openExternalUrl(resolvedUrl);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_state == 'loading') {
       return const Scaffold(
         backgroundColor: Color(0xFF1E293B),
-        body: Center(child: CircularProgressIndicator(color: AppTheme.tealNeon)),
+        body: Center(
+          child: CircularProgressIndicator(color: AppTheme.tealNeon),
+        ),
       );
     }
     if (_state == 'error') {
@@ -474,9 +627,13 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
         ),
       );
     }
-    final signer = Map<String, dynamic>.from((_docData?['signer'] ?? {}) as Map);
+    final signer = Map<String, dynamic>.from(
+      (_docData?['signer'] ?? {}) as Map,
+    );
     final doc = Map<String, dynamic>.from((_docData?['document'] ?? {}) as Map);
-    final org = Map<String, dynamic>.from((_docData?['organization'] ?? {}) as Map);
+    final org = Map<String, dynamic>.from(
+      (_docData?['organization'] ?? {}) as Map,
+    );
     final fields = (_docData?['fields'] as List<dynamic>? ?? [])
         .map((e) => Map<String, dynamic>.from(e as Map))
         .toList();
@@ -499,11 +656,19 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(LucideIcons.checkCircle2, color: Colors.greenAccent, size: 80),
+                const Icon(
+                  LucideIcons.checkCircle2,
+                  color: Colors.greenAccent,
+                  size: 80,
+                ),
                 const SizedBox(height: 24),
                 const Text(
                   'Tudo pronto!',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
@@ -516,6 +681,12 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
                   'Uma cópia será enviada ao seu e-mail.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white54, fontSize: 14),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: _openDownload,
+                  icon: const Icon(LucideIcons.download),
+                  label: const Text('Baixar documento final'),
                 ),
               ],
             ),
@@ -537,7 +708,11 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
             ),
             child: Row(
               children: [
-                Image.asset('assets/images/logo.png', height: 32, fit: BoxFit.contain),
+                Image.asset(
+                  'assets/images/logo.png',
+                  height: 32,
+                  fit: BoxFit.contain,
+                ),
                 const SizedBox(width: 24),
                 Expanded(
                   child: Column(
@@ -545,28 +720,48 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
                     children: [
                       Text(
                         (doc['name'] ?? 'Documento para Assinatura').toString(),
-                        style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       Text(
                         'Enviado por ${org['name'] ?? 'SignProof'}',
-                        style: const TextStyle(color: Colors.white54, fontSize: 12),
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: pendingFields.isEmpty ? Colors.green.withOpacity(0.2) : AppTheme.tealNeon.withOpacity(0.2),
+                    color: pendingFields.isEmpty
+                        ? Colors.green.withValues(alpha: 0.2)
+                        : AppTheme.tealNeon.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: pendingFields.isEmpty ? Colors.green : AppTheme.tealNeon),
+                    border: Border.all(
+                      color: pendingFields.isEmpty
+                          ? Colors.green
+                          : AppTheme.tealNeon,
+                    ),
                   ),
                   child: Text(
-                    pendingFields.isEmpty ? 'Pronto para Concluir' : '${pendingFields.length} Campo(s) Restante(s)',
+                    pendingFields.isEmpty
+                        ? 'Pronto para Concluir'
+                        : '${pendingFields.length} Campo(s) Restante(s)',
                     style: TextStyle(
-                      color: pendingFields.isEmpty ? Colors.greenAccent : AppTheme.tealNeon,
+                      color: pendingFields.isEmpty
+                          ? Colors.greenAccent
+                          : AppTheme.tealNeon,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -607,42 +802,15 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (signer['auth_method'] == 'email_token') ...[
-                        const Text(
-                          'Verificação de Identidade',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Para garantir a validade jurídica, confirme seu e-mail.',
-                          style: TextStyle(color: Colors.white54, fontSize: 12),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: _tokenController,
-                          style: const TextStyle(color: Colors.white),
-                          decoration: InputDecoration(
-                            labelText: 'Código do E-mail',
-                            labelStyle: const TextStyle(color: Colors.white54),
-                            filled: true,
-                            fillColor: Colors.black26,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide.none,
-                            ),
-                            suffixIcon: TextButton(
-                              onPressed: _isSendingCode ? null : _requestVerificationToken,
-                              child: Text(_isSendingCode ? '...' : 'Enviar'),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 32),
-                      ],
-
-                      if (_state == 'validation' && pendingValidations.isNotEmpty) ...[
+                      if (_state == 'validation' &&
+                          pendingValidations.isNotEmpty) ...[
                         const Text(
                           'Validação Valeris',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
                         const SizedBox(height: 16),
                         if (kIsWeb)
@@ -650,7 +818,10 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(12),
                               child: ValerisFrame(
-                                serviceUrl: _validationServicePath((pendingValidations.first['StepType'] ?? '').toString()),
+                                serviceUrl: _validationServicePath(
+                                  (pendingValidations.first['StepType'] ?? '')
+                                      .toString(),
+                                ),
                                 onCaptureSuccess: (serviceType, captureId) {
                                   _completeValidation(
                                     pendingValidations.first,
@@ -668,17 +839,24 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                pendingFields.isEmpty ? LucideIcons.checkCircle2 : LucideIcons.pencil,
+                                pendingFields.isEmpty
+                                    ? LucideIcons.checkCircle2
+                                    : LucideIcons.pencil,
                                 size: 48,
-                                color: pendingFields.isEmpty ? Colors.greenAccent : AppTheme.tealNeon,
+                                color: pendingFields.isEmpty
+                                    ? Colors.greenAccent
+                                    : AppTheme.tealNeon,
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                pendingFields.isEmpty 
-                                    ? 'Todos os campos preenchidos!' 
+                                pendingFields.isEmpty
+                                    ? 'Todos os campos preenchidos!'
                                     : 'Por favor, assine todos os campos indicados no documento ao lado.',
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
                               ),
                             ],
                           ),
@@ -691,16 +869,34 @@ class _PublicSigningPageState extends State<PublicSigningPage> {
                               ? () => setState(() => _state = 'validation')
                               : _signDocument,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: pendingValidations.isNotEmpty ? Colors.blueAccent : Colors.green,
+                            backgroundColor: pendingValidations.isNotEmpty
+                                ? Colors.blueAccent
+                                : Colors.green,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                           child: Text(
-                            pendingValidations.isNotEmpty ? 'Iniciar Validação' : 'Finalizar Assinatura',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            pendingValidations.isNotEmpty
+                                ? 'Iniciar Validação'
+                                : 'Finalizar Assinatura',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
+                      if (pendingFields.isNotEmpty ||
+                          pendingValidations.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Concluir assinatura será liberado quando todos os campos e validações obrigatórias estiverem completos.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.white54, fontSize: 12),
+                        ),
+                      ],
                     ],
                   ),
                 ),

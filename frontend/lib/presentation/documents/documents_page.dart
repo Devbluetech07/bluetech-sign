@@ -62,8 +62,12 @@ class _DocumentsPageState extends State<DocumentsPage> {
           _applyFilters();
         });
       }
-    } catch (e) {
-      debugPrint('Erro: $e');
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erro ao carregar documentos')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

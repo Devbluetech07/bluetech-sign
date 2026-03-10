@@ -12,7 +12,6 @@ import '../widgets/pdf_viewer.dart';
 import 'dart:typed_data';
 import 'package:web/web.dart' as web;
 import 'dart:js_interop';
-import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 class _SignerDraft {
   _SignerDraft({
@@ -52,6 +51,26 @@ class _FieldDraft {
   final double width;
   final double height;
   final int signerIndex;
+
+  _FieldDraft copyWith({
+    String? fieldType,
+    int? page,
+    double? x,
+    double? y,
+    double? width,
+    double? height,
+    int? signerIndex,
+  }) {
+    return _FieldDraft(
+      fieldType: fieldType ?? this.fieldType,
+      page: page ?? this.page,
+      x: x ?? this.x,
+      y: y ?? this.y,
+      width: width ?? this.width,
+      height: height ?? this.height,
+      signerIndex: signerIndex ?? this.signerIndex,
+    );
+  }
 }
 
 class DocumentFlowPage extends StatefulWidget {
@@ -62,6 +81,10 @@ class DocumentFlowPage extends StatefulWidget {
 }
 
 class _DocumentFlowPageState extends State<DocumentFlowPage> {
+  static const double _larguraPainelEsquerdo = 220;
+  static const double _larguraPainelDireito = 220;
+  static const double _larguraCanvasBase = 920;
+  static const double _alturaCanvasBase = 1280;
   int _currentStep = 0;
 
   static const List<String> _stepLabels = <String>[
@@ -108,9 +131,21 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
   int _activeSignerIndex = 0;
   String _activeFieldType = 'signature';
   final List<_FieldDraft> _fields = <_FieldDraft>[];
+  int? _selectedFieldIndex;
   String? _temporaryDocUrl;
+  Uint8List? _temporaryDocBytes;
   double _zoomLevel = 1.0;
   final GlobalKey _canvasKey = GlobalKey();
+  static const List<Map<String, String>> _tiposCampo = [
+    {'value': 'signature', 'label': 'Assinatura'},
+    {'value': 'initial', 'label': 'Iniciais'},
+    {'value': 'date', 'label': 'Data'},
+    {'value': 'text', 'label': 'Texto'},
+    {'value': 'checkbox', 'label': 'Checkbox'},
+    {'value': 'number', 'label': 'Número'},
+    {'value': 'email', 'label': 'Email'},
+    {'value': 'image', 'label': 'Imagem'},
+  ];
 
   // Step 4
   bool _sequentialFlow = true;
@@ -174,17 +209,53 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
   Future<void> _pickFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'png', 'doc', 'docx'],
+      allowedExtensions: ['pdf'],
       withData: true,
     );
     if (result != null) {
       setState(() {
         _selectedFile = result.files.first;
+        _temporaryDocBytes = _selectedFile!.bytes;
         // Create a blob URL for local preview
-        final blob = web.Blob([(_selectedFile!.bytes as Uint8List).toJS].toJS, web.BlobPropertyBag(type: 'application/pdf'));
-        _temporaryDocUrl = web.URL.createObjectURL(blob);
+        if (_selectedFile!.bytes != null) {
+          final blob = web.Blob(
+            [(_selectedFile!.bytes as Uint8List).toJS].toJS,
+            web.BlobPropertyBag(type: 'application/pdf'),
+          );
+          _temporaryDocUrl = web.URL.createObjectURL(blob);
+        } else {
+          _temporaryDocUrl = null;
+        }
       });
     }
+  }
+
+  Future<void> _loadTemplatePreview(String templateId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token') ?? '';
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/v1/templates/$templateId/download'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (!mounted) return;
+    if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+      final bytes = response.bodyBytes;
+      final blob = web.Blob(
+        [bytes.toJS].toJS,
+        web.BlobPropertyBag(type: 'application/pdf'),
+      );
+      setState(() {
+        _temporaryDocBytes = bytes;
+        _temporaryDocUrl = web.URL.createObjectURL(blob);
+      });
+      return;
+    }
+
+    setState(() {
+      _temporaryDocBytes = null;
+      _temporaryDocUrl = null;
+    });
   }
 
   Future<void> _submitDocumentFlow() async {
@@ -250,7 +321,9 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
         final resUpload = await request.send();
         final uploadBody = await resUpload.stream.bytesToString();
         if (resUpload.statusCode != 201 && resUpload.statusCode != 200) {
-          throw Exception('Falha na transferência do arquivo pro MinIO: \$uploadBody');
+          throw Exception(
+            'Falha na transferência do arquivo pro MinIO: \$uploadBody',
+          );
         }
         uploadJson = jsonDecode(uploadBody) as Map<String, dynamic>;
       }
@@ -390,16 +463,47 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
       if (resSend.statusCode != 200)
         throw Exception('Falha no disparo do documento');
 
+      final sendBody = jsonDecode(resSend.body) as Map<String, dynamic>;
+      final emailsSent = (sendBody['emails_sent'] as num?)?.toInt() ?? 0;
+      final failedRaw = sendBody['emails_failed'] as List<dynamic>? ?? [];
+      final fallbackLinksRaw =
+          sendBody['signing_links_fallback'] as List<dynamic>? ?? [];
+      final fallbackLinks = fallbackLinksRaw
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Missão concluída: Documento disparado!',
-              style: TextStyle(color: Colors.white),
+        if (failedRaw.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Documento enviado com sucesso ($emailsSent e-mail(s) enviados).',
+                style: const TextStyle(color: Colors.white),
+              ),
+              backgroundColor: AppTheme.tealNeon,
             ),
-            backgroundColor: AppTheme.tealNeon,
-          ),
-        );
+          );
+        } else {
+          final firstLink = fallbackLinks.isNotEmpty
+              ? (fallbackLinks.first['link'] ?? '').toString()
+              : '';
+          final warningMessage =
+              'Envio parcial: $emailsSent enviado(s), ${failedRaw.length} falha(s).';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                firstLink.isNotEmpty
+                    ? '$warningMessage Link de assinatura copiado.'
+                    : warningMessage,
+                style: const TextStyle(color: Colors.white),
+              ),
+              backgroundColor: Colors.orangeAccent,
+            ),
+          );
+          if (firstLink.isNotEmpty) {
+            web.window.navigator.clipboard.writeText(firstLink);
+          }
+        }
         context.go('/documents');
       }
     } catch (e) {
@@ -478,8 +582,6 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
     });
   }
 
-
-
   bool _validateCurrentStep() {
     if (_currentStep == 0 &&
         _selectedFile == null &&
@@ -512,8 +614,8 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
       child: Column(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: color.withOpacity(0.1),
@@ -525,15 +627,15 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
             child: Icon(
               isCompleted ? LucideIcons.check : icon,
               color: color,
-              size: 20,
+              size: 16,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             label,
             style: TextStyle(
               color: color,
-              fontSize: 10,
+              fontSize: 9,
               fontWeight: FontWeight.bold,
               fontFamily: 'Orbitron',
               letterSpacing: 1.5,
@@ -623,7 +725,15 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
               .toList(),
           onChanged: (value) {
             setState(() => _selectedTemplateId = value);
-            if (value == null) return;
+            if (value == null) {
+              setState(() {
+                _temporaryDocBytes = _selectedFile?.bytes;
+                if (_selectedFile?.bytes == null) {
+                  _temporaryDocUrl = null;
+                }
+              });
+              return;
+            }
             final selected = _templates.firstWhere(
               (e) => e['ID'].toString() == value,
               orElse: () => {},
@@ -636,6 +746,14 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
             _docNameController.text = (selected['Name'] ?? '').toString();
             _templateContentController.text = (selected['Content'] ?? '')
                 .toString();
+            if (_templateHasFile) {
+              _loadTemplatePreview(value);
+            } else if (_selectedFile == null) {
+              setState(() {
+                _temporaryDocBytes = null;
+                _temporaryDocUrl = null;
+              });
+            }
           },
         ),
         const SizedBox(height: 10),
@@ -1147,9 +1265,10 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
               );
             }),
           ),
-        ],
-      );
+      ],
+    );
   }
+
   Widget _buildStep3() {
     return Column(
       children: [
@@ -1159,7 +1278,9 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.05),
-            border: Border(bottom: BorderSide(color: AppTheme.tealNeon.withOpacity(0.3))),
+            border: Border(
+              bottom: BorderSide(color: AppTheme.tealNeon.withOpacity(0.3)),
+            ),
           ),
           child: Row(
             children: [
@@ -1168,19 +1289,27 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Etapa 3 de 4',
-                    style: TextStyle(fontSize: 12, color: AppTheme.tealNeon, fontWeight: FontWeight.normal),
+                    'Etapa 3 de 5',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppTheme.tealNeon,
+                      fontWeight: FontWeight.normal,
+                    ),
                   ),
                   const Text(
-                    'Configurar envio',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                    'Posicionar campos',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ],
               ),
               const Spacer(),
               _buildHeaderPill(
                 icon: LucideIcons.users,
-                label: '${_signers.isEmpty ? 0 : 1}/${_signers.length} signatários',
+                label: '${_signers.length}/${_signers.length} signatários',
               ),
               const SizedBox(width: 12),
               _buildHeaderPill(
@@ -1220,7 +1349,11 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
           const SizedBox(width: 8),
           Text(
             label,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
         ],
       ),
@@ -1229,7 +1362,7 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
 
   Widget _buildLeftSidebar() {
     return Container(
-      width: 280,
+      width: _larguraPainelEsquerdo,
       color: Colors.transparent,
       child: Column(
         children: [
@@ -1245,11 +1378,23 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                   const SizedBox(height: 32),
                   _buildSectionTitle('ARRASTE OS CAMPOS'),
                   const SizedBox(height: 16),
-                  _buildStep3ToolItem(LucideIcons.penTool, 'Assinatura', 'signature'),
-                  _buildStep3ToolItem(LucideIcons.atSign, 'Iniciais', 'initial'),
+                  _buildStep3ToolItem(
+                    LucideIcons.penTool,
+                    'Assinatura',
+                    'signature',
+                  ),
+                  _buildStep3ToolItem(
+                    LucideIcons.atSign,
+                    'Iniciais',
+                    'initial',
+                  ),
                   _buildStep3ToolItem(LucideIcons.calendar, 'Data', 'date'),
                   _buildStep3ToolItem(LucideIcons.type, 'Texto', 'text'),
-                  _buildStep3ToolItem(LucideIcons.checkSquare, 'Checkbox', 'checkbox'),
+                  _buildStep3ToolItem(
+                    LucideIcons.checkSquare,
+                    'Checkbox',
+                    'checkbox',
+                  ),
                   _buildStep3ToolItem(LucideIcons.hash, 'Número', 'number'),
                   _buildStep3ToolItem(LucideIcons.mail, 'Email', 'email'),
                   _buildStep3ToolItem(LucideIcons.image, 'Imagem', 'image'),
@@ -1266,10 +1411,15 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                 _buildSectionTitle('CAMPOS POR SIGNATÁRIO'),
                 const SizedBox(height: 16),
                 if (_signers.isEmpty)
-                  const Text('Nenhum signatário', style: TextStyle(color: Colors.white54, fontSize: 13))
+                  const Text(
+                    'Nenhum signatário',
+                    style: TextStyle(color: Colors.white54, fontSize: 13),
+                  )
                 else
                   ...List.generate(_signers.length, (index) {
-                    final count = _fields.where((f) => f.signerIndex == index).length;
+                    final count = _fields
+                        .where((f) => f.signerIndex == index)
+                        .length;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
@@ -1279,26 +1429,37 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                             height: 10,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: _signerColors[index % _signerColors.length],
+                              color:
+                                  _signerColors[index % _signerColors.length],
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               _signers[index].name,
-                              style: const TextStyle(fontSize: 13, color: Colors.white70),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Colors.white70,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Text(
                               '$count',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.white),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
                             ),
                           ),
                         ],
@@ -1356,7 +1517,11 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                   const SizedBox(width: 12),
                   Text(
                     _signers[i].name,
-                    style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ],
               ),
@@ -1375,42 +1540,63 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
       feedback: Material(
         color: Colors.transparent,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
             color: AppTheme.tealDark.withOpacity(0.8),
             borderRadius: BorderRadius.circular(8),
-            boxShadow: [BoxShadow(color: AppTheme.tealNeon.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 4))],
+            boxShadow: [
+              BoxShadow(
+                color: AppTheme.tealNeon.withOpacity(0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
             border: Border.all(color: AppTheme.tealNeon),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon, size: 20, color: AppTheme.tealNeon),
-              const SizedBox(width: 12),
-              Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white)),
+              const SizedBox(width: 10),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
             ],
           ),
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.only(bottom: 6),
         child: InkWell(
           onTap: () => setState(() => _activeFieldType = type),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: isActive ? Colors.white.withOpacity(0.1) : Colors.transparent,
+              color: isActive
+                  ? Colors.white.withOpacity(0.1)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: isActive ? AppTheme.tealNeon : Colors.white12),
+              border: Border.all(
+                color: isActive ? AppTheme.tealNeon : Colors.white12,
+              ),
             ),
             child: Row(
               children: [
-                Icon(icon, size: 20, color: isActive ? AppTheme.tealNeon : Colors.white70),
-                const SizedBox(width: 12),
+                Icon(
+                  icon,
+                  size: 16,
+                  color: isActive ? AppTheme.tealNeon : Colors.white70,
+                ),
+                const SizedBox(width: 10),
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 12,
                     fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
                     color: isActive ? AppTheme.tealNeon : Colors.white70,
                   ),
@@ -1443,17 +1629,25 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                   children: [
                     _buildPageNavButton(
                       icon: LucideIcons.chevronLeft,
-                      onPressed: _activePage > 1 ? () => setState(() => _activePage--) : null,
+                      onPressed: _activePage > 1
+                          ? () => setState(() => _activePage--)
+                          : null,
                     ),
                     const SizedBox(width: 8),
                     Text(
                       'Página $_activePage de $_totalPages',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     _buildPageNavButton(
                       icon: LucideIcons.chevronRight,
-                      onPressed: _activePage < _totalPages ? () => setState(() => _activePage++) : null,
+                      onPressed: _activePage < _totalPages
+                          ? () => setState(() => _activePage++)
+                          : null,
                     ),
                   ],
                 ),
@@ -1461,17 +1655,25 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                   children: [
                     _buildPageNavButton(
                       icon: LucideIcons.zoomOut,
-                      onPressed: _zoomLevel > 0.5 ? () => setState(() => _zoomLevel -= 0.1) : null,
+                      onPressed: _zoomLevel > 0.5
+                          ? () => setState(() => _zoomLevel -= 0.1)
+                          : null,
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '${(_zoomLevel * 100).toInt()}%',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     _buildPageNavButton(
                       icon: LucideIcons.zoomIn,
-                      onPressed: _zoomLevel < 3.0 ? () => setState(() => _zoomLevel += 0.1) : null,
+                      onPressed: _zoomLevel < 3.0
+                          ? () => setState(() => _zoomLevel += 0.1)
+                          : null,
                     ),
                   ],
                 ),
@@ -1483,7 +1685,9 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
               builder: (context, constraints) {
                 return DragTarget<String>(
                   onAcceptWithDetails: (details) {
-                    final box = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+                    final box =
+                        _canvasKey.currentContext?.findRenderObject()
+                            as RenderBox?;
                     if (box == null) return;
                     final localOffset = box.globalToLocal(details.offset);
                     _addFieldAt(
@@ -1495,27 +1699,59 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                   builder: (context, candidateData, _) {
                     final highlight = candidateData.isNotEmpty;
                     return SingleChildScrollView(
-                      padding: const EdgeInsets.all(40),
+                      padding: const EdgeInsets.all(12),
                       child: Center(
                         child: Transform.scale(
                           scale: _zoomLevel,
                           alignment: Alignment.topCenter,
                           child: Container(
                             key: _canvasKey,
-                            width: 800,
-                            height: 1100,
+                            width: _larguraCanvasBase,
+                            height: _alturaCanvasBase,
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 20, offset: Offset(0, 10))],
-                              border: highlight ? Border.all(color: AppTheme.tealNeon, width: 2) : null,
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black12,
+                                  blurRadius: 20,
+                                  offset: Offset(0, 10),
+                                ),
+                              ],
+                              border: highlight
+                                  ? Border.all(
+                                      color: AppTheme.tealNeon,
+                                      width: 2,
+                                    )
+                                  : null,
                             ),
-                            child: _temporaryDocUrl != null
+                            child:
+                                (_temporaryDocBytes != null &&
+                                        _temporaryDocBytes!.isNotEmpty) ||
+                                    _temporaryDocUrl != null
                                 ? Stack(
                                     children: [
                                       SizedBox.expand(
                                         child: PdfViewer(
-                                          fileUrl: _temporaryDocUrl!,
+                                          fileUrl: _temporaryDocUrl,
+                                          fileBytes: _temporaryDocBytes,
                                           currentPage: _activePage,
+                                          onDocumentLoaded: (pages) {
+                                            setState(() {
+                                              _totalPages = pages <= 0
+                                                  ? 1
+                                                  : pages;
+                                              if (_activePage > _totalPages) {
+                                                _activePage = _totalPages;
+                                              }
+                                            });
+                                          },
+                                          onPageChanged: (page) {
+                                            if (page != _activePage) {
+                                              setState(
+                                                () => _activePage = page,
+                                              );
+                                            }
+                                          },
                                         ),
                                       ),
                                       Positioned.fill(
@@ -1523,27 +1759,48 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                                           behavior: HitTestBehavior.opaque,
                                           onTapDown: (details) => _addFieldAt(
                                             details.localPosition,
-                                            const Size(800, 1100),
+                                            const Size(
+                                              _larguraCanvasBase,
+                                              _alturaCanvasBase,
+                                            ),
                                           ),
-                                          child: Container(color: Colors.transparent),
+                                          child: Container(
+                                            color: Colors.transparent,
+                                          ),
                                         ),
                                       ),
                                       ..._fields
-                                          .where((f) => f.page == _activePage)
-                                          .map((f) => _buildReplicatedField(f))
-                                          .toList(),
+                                          .asMap()
+                                          .entries
+                                          .where(
+                                            (entry) =>
+                                                entry.value.page == _activePage,
+                                          )
+                                          .map(
+                                            (entry) => _buildReplicatedField(
+                                              entry.key,
+                                              entry.value,
+                                            ),
+                                          ),
                                     ],
                                   )
                                 : Center(
                                     child: Column(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(LucideIcons.fileText, size: 48, color: const Color(0xFFCBD5E1)),
+                                        Icon(
+                                          LucideIcons.fileText,
+                                          size: 48,
+                                          color: const Color(0xFFCBD5E1),
+                                        ),
                                         const SizedBox(height: 16),
                                         const Text(
                                           'Selecione um documento na Etapa 1 para visualizá-lo aqui.',
                                           textAlign: TextAlign.center,
-                                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                                          style: TextStyle(
+                                            color: Color(0xFF94A3B8),
+                                            fontSize: 14,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1562,37 +1819,179 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
     );
   }
 
-  Widget _buildReplicatedField(_FieldDraft field) {
-    // Relative positioning handled by PdfViewer internal stack
-    // But since we are passing children to PdfViewer, it should handle them.
-    // If PdfViewer uses a Stack, we use Positioned.
+  Widget _buildReplicatedField(int index, _FieldDraft field) {
     final color = _signerColors[field.signerIndex % _signerColors.length];
-    
+    final isSelected = _selectedFieldIndex == index;
+
     return Positioned(
-      left: field.x * 800, // Assuming 800 baseline
-      top: field.y * 1100, // Assuming 1100 baseline
-      child: Container(
-        width: field.width * 800,
-        height: field.height * 1100,
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: color, width: 2),
+      left: field.x * _larguraCanvasBase,
+      top: field.y * _alturaCanvasBase,
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedFieldIndex = index),
+        onPanUpdate: (details) {
+          final newX = (field.x + (details.delta.dx / _larguraCanvasBase))
+              .clamp(0.0, 0.95);
+          final newY = (field.y + (details.delta.dy / _alturaCanvasBase)).clamp(
+            0.0,
+            0.95,
+          );
+          _updateFieldAt(index, field.copyWith(x: newX, y: newY));
+        },
+        child: Container(
+          width: field.width * _larguraCanvasBase,
+          height: field.height * _alturaCanvasBase,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(
+              color: isSelected ? AppTheme.goldSoft : color,
+              width: isSelected ? 3 : 2,
+            ),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Text(
+                  field.fieldType.toUpperCase(),
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Positioned(
+                right: 2,
+                top: 2,
+                child: GestureDetector(
+                  onTap: () => _removeFieldAt(index),
+                  child: Icon(LucideIcons.xCircle, size: 14, color: color),
+                ),
+              ),
+            ],
+          ),
         ),
-        child: Stack(
+      ),
+    );
+  }
+
+  Widget _buildCampoPropriedades(_FieldDraft field, int index) {
+    return Theme(
+      data: Theme.of(context).copyWith(
+        brightness: Brightness.light,
+        inputDecorationTheme: const InputDecorationTheme(
+          labelStyle: TextStyle(color: Color(0xFF334155)),
+          border: OutlineInputBorder(),
+        ),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Text(
-                field.fieldType.toUpperCase(),
-                style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.bold),
+            const Text(
+              'Campo selecionado',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF0F172A),
               ),
             ),
-            Positioned(
-              right: 2,
-              top: 2,
-              child: GestureDetector(
-                onTap: () => setState(() => _fields.remove(field)),
-                child: Icon(LucideIcons.xCircle, size: 14, color: color),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              initialValue: field.fieldType,
+              style: const TextStyle(color: Color(0xFF0F172A)),
+              decoration: const InputDecoration(
+                labelText: 'Tipo',
+                border: OutlineInputBorder(),
+              ),
+              items: _tiposCampo
+                  .map(
+                    (item) => DropdownMenuItem<String>(
+                      value: item['value']!,
+                      child: Text(
+                        item['label']!,
+                        style: const TextStyle(color: Color(0xFF0F172A)),
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) return;
+                _updateFieldAt(index, field.copyWith(fieldType: value));
+              },
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<int>(
+              initialValue: field.signerIndex,
+              style: const TextStyle(color: Color(0xFF0F172A)),
+              decoration: const InputDecoration(
+                labelText: 'Signatário',
+                border: OutlineInputBorder(),
+              ),
+              items: List.generate(_signers.length, (i) {
+                return DropdownMenuItem<int>(
+                  value: i,
+                  child: Text(
+                    _signers[i].name,
+                    style: const TextStyle(color: Color(0xFF0F172A)),
+                  ),
+                );
+              }),
+              onChanged: (value) {
+                if (value == null) return;
+                _updateFieldAt(index, field.copyWith(signerIndex: value));
+              },
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Largura ${(field.width * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(color: Color(0xFF0F172A)),
+            ),
+            Slider(
+              value: field.width.clamp(0.08, 0.7),
+              min: 0.08,
+              max: 0.7,
+              onChanged: (v) => _updateFieldAt(index, field.copyWith(width: v)),
+            ),
+            Text(
+              'Altura ${(field.height * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(color: Color(0xFF0F172A)),
+            ),
+            Slider(
+              value: field.height.clamp(0.03, 0.3),
+              min: 0.03,
+              max: 0.3,
+              onChanged: (v) =>
+                  _updateFieldAt(index, field.copyWith(height: v)),
+            ),
+            Text(
+              'Posição X ${(field.x * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(color: Color(0xFF0F172A)),
+            ),
+            Slider(
+              value: field.x.clamp(0.0, 0.95),
+              min: 0,
+              max: 0.95,
+              onChanged: (v) => _updateFieldAt(index, field.copyWith(x: v)),
+            ),
+            Text(
+              'Posição Y ${(field.y * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(color: Color(0xFF0F172A)),
+            ),
+            Slider(
+              value: field.y.clamp(0.0, 0.95),
+              min: 0,
+              max: 0.95,
+              onChanged: (v) => _updateFieldAt(index, field.copyWith(y: v)),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _removeFieldAt(index),
+                icon: const Icon(LucideIcons.trash2),
+                label: const Text('Remover campo'),
               ),
             ),
           ],
@@ -1601,9 +2000,40 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
     );
   }
 
+  Widget _buildPropriedadesBody() {
+    final selectedIndex = _selectedFieldIndex;
+    if (selectedIndex == null ||
+        selectedIndex < 0 ||
+        selectedIndex >= _fields.length) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                LucideIcons.mousePointer2,
+                size: 40,
+                color: const Color(0xFFCBD5E1),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Selecione um campo para editar suas propriedades',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return _buildCampoPropriedades(_fields[selectedIndex], selectedIndex);
+  }
+
   Widget _buildRightSidebar() {
     return Container(
-      width: 280,
+      width: _larguraPainelDireito,
       color: Colors.white,
       child: Column(
         children: [
@@ -1612,25 +2042,7 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
             child: _buildSectionTitle('PROPRIEDADES'),
           ),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
-          Expanded(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(LucideIcons.mousePointer2, size: 40, color: const Color(0xFFCBD5E1)),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Selecione um campo para editar suas propriedades',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: Color(0xFF94A3B8)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: _buildPropriedadesBody()),
           const Divider(height: 1, color: Color(0xFFE2E8F0)),
           Container(
             padding: const EdgeInsets.all(24),
@@ -1656,7 +2068,9 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                             color: const Color(0xFFF8FAFB),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
-                              color: isActive ? const Color(0xFF0D9488) : const Color(0xFFE2E8F0),
+                              color: isActive
+                                  ? const Color(0xFF0D9488)
+                                  : const Color(0xFFE2E8F0),
                               width: isActive ? 2 : 1,
                             ),
                           ),
@@ -1664,8 +2078,12 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                             child: Text(
                               '$p',
                               style: TextStyle(
-                                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                                color: isActive ? const Color(0xFF0D9488) : const Color(0xFF64748B),
+                                fontWeight: isActive
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: isActive
+                                    ? const Color(0xFF0D9488)
+                                    : const Color(0xFF64748B),
                               ),
                             ),
                           ),
@@ -1695,18 +2113,44 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
           page: _activePage,
           x: normalizedX,
           y: normalizedY,
-          width: 0.18,
-          height: 0.05,
+          width: 0.2,
+          height: 0.06,
           signerIndex: _activeSignerIndex.clamp(0, _signers.length - 1),
         ),
       );
+      _selectedFieldIndex = _fields.length - 1;
     });
   }
 
-  Widget _buildPageNavButton({required IconData icon, VoidCallback? onPressed}) {
+  void _updateFieldAt(int index, _FieldDraft updated) {
+    if (index < 0 || index >= _fields.length) return;
+    setState(() {
+      _fields[index] = updated;
+    });
+  }
+
+  void _removeFieldAt(int index) {
+    if (index < 0 || index >= _fields.length) return;
+    setState(() {
+      _fields.removeAt(index);
+      if (_selectedFieldIndex == index) {
+        _selectedFieldIndex = null;
+      } else if (_selectedFieldIndex != null && _selectedFieldIndex! > index) {
+        _selectedFieldIndex = _selectedFieldIndex! - 1;
+      }
+    });
+  }
+
+  Widget _buildPageNavButton({
+    required IconData icon,
+    VoidCallback? onPressed,
+  }) {
     return IconButton(
       onPressed: onPressed,
-      icon: Icon(icon, color: onPressed == null ? Colors.white38 : Colors.white),
+      icon: Icon(
+        icon,
+        color: onPressed == null ? Colors.white38 : Colors.white,
+      ),
       style: IconButton.styleFrom(
         backgroundColor: Colors.white.withOpacity(0.1),
         padding: const EdgeInsets.all(8),
@@ -1714,8 +2158,6 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
       ),
     );
   }
-
-
 
   Widget _buildStep4() {
     return Column(
@@ -1947,9 +2389,7 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppTheme.backgroundGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppTheme.backgroundGradient),
         child: Stack(
           children: [
             Positioned.fill(
@@ -2009,7 +2449,9 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
 
                   Expanded(
                     child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: isStep3 ? 0 : 32),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isStep3 ? 0 : 24,
+                      ),
                       child: isStep3
                           ? _buildStep3()
                           : SingleChildScrollView(
@@ -2027,10 +2469,21 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
 
                   Container(
                     decoration: BoxDecoration(
-                      color: isStep3 ? Colors.white.withOpacity(0.05) : Colors.transparent,
-                      border: isStep3 ? Border(top: BorderSide(color: AppTheme.tealNeon.withOpacity(0.3))) : null,
+                      color: isStep3
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.transparent,
+                      border: isStep3
+                          ? Border(
+                              top: BorderSide(
+                                color: AppTheme.tealNeon.withOpacity(0.3),
+                              ),
+                            )
+                          : null,
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 24,
+                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -2046,12 +2499,18 @@ class _DocumentFlowPageState extends State<DocumentFlowPage> {
                             ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.white,
-                              side: BorderSide(color: isStep3 ? AppTheme.tealNeon.withOpacity(0.3) : Colors.white30),
+                              side: BorderSide(
+                                color: isStep3
+                                    ? AppTheme.tealNeon.withOpacity(0.3)
+                                    : Colors.white30,
+                              ),
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 24,
                                 vertical: 16,
                               ),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
                             ),
                             onPressed: _isSaving
                                 ? null

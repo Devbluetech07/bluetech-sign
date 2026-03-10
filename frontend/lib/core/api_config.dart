@@ -3,9 +3,14 @@ import 'package:flutter/foundation.dart';
 class ApiConfig {
   static String get baseUrl {
     if (kIsWeb) {
-      // Nginx routes /api/ to backend.
-      return Uri.base.origin; 
+      // Local web-server (4100) does not proxy /api.
+      final host = Uri.base.host;
+      if (host == 'localhost' || host == '127.0.0.1') {
+        return '${Uri.base.scheme}://$host:3001';
+      }
+      // Production (with reverse proxy) keeps same origin.
+      return Uri.base.origin;
     }
-    return 'http://localhost:4101';
+    return 'http://localhost:3001';
   }
 }

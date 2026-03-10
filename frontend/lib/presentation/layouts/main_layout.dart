@@ -23,7 +23,6 @@ class _MainLayoutState extends State<MainLayout> {
     {'to': '/folders', 'label': 'Pastas', 'icon': LucideIcons.folderTree},
     {'to': '/templates', 'label': 'Modelos', 'icon': LucideIcons.layers},
     {'to': '/contacts', 'label': 'Contatos', 'icon': LucideIcons.users},
-    {'to': '/bulk-send', 'label': 'Envio em massa', 'icon': LucideIcons.shield},
     {'to': '/analytics', 'label': 'Relatórios', 'icon': LucideIcons.barChart3},
     {'to': '/team', 'label': 'Equipe', 'icon': LucideIcons.users},
     {
@@ -225,9 +224,17 @@ class _MainLayoutState extends State<MainLayout> {
                   : MainAxisAlignment.start,
               children: [
                 if (_isCollapsed && !isMobile)
-                  Image.asset('assets/images/logo.png', height: 32, fit: BoxFit.contain)
+                  Image.asset(
+                    'assets/images/logo.png',
+                    height: 32,
+                    fit: BoxFit.contain,
+                  )
                 else
-                  Image.asset('assets/images/logo.png', height: 48, fit: BoxFit.contain),
+                  Image.asset(
+                    'assets/images/logo.png',
+                    height: 48,
+                    fit: BoxFit.contain,
+                  ),
               ],
             ),
           ),

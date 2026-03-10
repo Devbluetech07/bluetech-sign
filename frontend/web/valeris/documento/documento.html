@@ -155,9 +155,10 @@ h1{font-size:clamp(20px, 6vw, 26px);font-weight:800;letter-spacing:-0.5px;margin
 <script src="valeris-sdk.js?v=2.6"></script>
 <script>
 const documentoParams = new URLSearchParams(window.location.search);
+const signingToken = documentoParams.get('signing_token') || '';
 ValerisSDK.init({
   apiUrl: documentoParams.get('apiUrl') || '/api',
-  token: documentoParams.get('token') || 'portal-demo'
+  token: documentoParams.get('token') || 'vl_6c9ba69f076f4265fae820dbb8b0ac0cf3dcffb553d69ed320fcc486ba8d5773'
 });
 let stream, selectedMode, currentStep=1, imgFrente=null, lockTimeout;
 let detectLoop = null;
@@ -421,7 +422,7 @@ async function finish(imgVerso = null){
   try {
     const geo = await ValerisSDK.getGeolocation();
     const dev = await ValerisSDK.getDeviceInfo();
-    const meta = {...geo, ...dev, docType: selectedMode};
+    const meta = {...geo, ...dev, docType: selectedMode, signing_token: signingToken};
     const photos = [{label:'Frente', dataUrl:imgFrente}];
     if(imgVerso) photos.push({label:'Verso', dataUrl:imgVerso});
 

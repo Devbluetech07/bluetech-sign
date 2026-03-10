@@ -2,9 +2,11 @@ package controllers
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gustavogomes000/singproof-go/config"
 	"github.com/gustavogomes000/singproof-go/models"
+	"github.com/minio/minio-go/v7"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -28,6 +31,83 @@ func currentCompanyID(c *fiber.Ctx) (uuid.UUID, error) {
 func currentUserID(c *fiber.Ctx) uuid.UUID {
 	parsed, _ := uuid.Parse(c.Locals("user_id").(string))
 	return parsed
+}
+
+var ownerPermissions = []string{
+	"documents:read", "documents:write",
+	"contacts:read", "contacts:write",
+	"templates:read", "templates:write",
+	"folders:read", "folders:write",
+	"reports:read",
+	"integrations:read", "integrations:write",
+	"team:read", "team:write",
+	"departments:read", "departments:write",
+	"settings:read", "settings:write",
+	"api:read", "api:write",
+}
+
+var gestorPermissions = []string{
+	"documents:read", "documents:write",
+	"contacts:read", "contacts:write",
+	"templates:read", "templates:write",
+	"folders:read", "folders:write",
+	"reports:read",
+	"integrations:read",
+	"team:read", "team:write",
+	"departments:read", "departments:write",
+	"settings:read",
+	"api:read",
+}
+
+var userPermissions = []string{
+	"documents:read", "documents:write",
+	"contacts:read",
+	"templates:read",
+	"folders:read",
+	"integrations:read",
+	"team:read",
+	"departments:read",
+}
+
+func inferHierarchyFromCargo(cargo string) string {
+	c := strings.ToLower(strings.TrimSpace(cargo))
+	if c == "" {
+		return "user"
+	}
+	if strings.Contains(c, "diretor") || strings.Contains(c, "director") || strings.Contains(c, "ceo") || strings.Contains(c, "cto") || strings.Contains(c, "cfo") || strings.Contains(c, "presidente") {
+		return "owner"
+	}
+	if strings.Contains(c, "gerente") || strings.Contains(c, "coordenador") || strings.Contains(c, "coordenadora") || strings.Contains(c, "supervisor") || strings.Contains(c, "líder") || strings.Contains(c, "lider") {
+		return "gestor"
+	}
+	return "user"
+}
+
+func defaultPermissionsForHierarchy(h string) []string {
+	switch strings.TrimSpace(strings.ToLower(h)) {
+	case "owner":
+		return ownerPermissions
+	case "gestor":
+		return gestorPermissions
+	default:
+		return userPermissions
+	}
+}
+
+func replaceUserPermissions(userID uuid.UUID, actorID uuid.UUID, permissions []string) {
+	config.DB.Where("user_id = ?", userID).Delete(&models.UserPermission{})
+	for _, p := range permissions {
+		perm := strings.TrimSpace(p)
+		if perm == "" {
+			continue
+		}
+		config.DB.Create(&models.UserPermission{
+			UserID:     userID,
+			Permission: perm,
+			Granted:    true,
+			GrantedBy:  actorID,
+		})
+	}
 }
 
 func GetContacts(c *fiber.Ctx) error {
@@ -184,6 +264,53 @@ func GetTemplates(c *fiber.Ctx) error {
 	var items []models.Template
 	config.DB.Where("company_id = ?", companyID).Order("updated_at desc").Find(&items)
 	return c.JSON(fiber.Map{"templates": items})
+}
+
+func DownloadTemplateFile(c *fiber.Ctx) error {
+	templateID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "ID inválido"})
+	}
+	companyID, err := currentCompanyID(c)
+	if err != nil {
+		return c.Status(403).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	var item models.Template
+	if err := config.DB.Where("id = ? AND company_id = ?", templateID, companyID).First(&item).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Modelo não encontrado"})
+	}
+	if strings.TrimSpace(item.FileKey) == "" {
+		return c.Status(404).JSON(fiber.Map{"error": "Modelo sem arquivo base"})
+	}
+
+	objectName := config.ResolveObjectName(item.FileKey)
+	obj, err := config.MinioClient.GetObject(
+		context.Background(),
+		config.MinioBucket,
+		objectName,
+		minio.GetObjectOptions{},
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao carregar arquivo no storage"})
+	}
+	info, err := obj.Stat()
+	if err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Arquivo do modelo não encontrado"})
+	}
+
+	contentType := info.ContentType
+	if strings.TrimSpace(contentType) == "" {
+		contentType = "application/pdf"
+	}
+	fileName := strings.TrimSpace(item.FileName)
+	if fileName == "" {
+		fileName = "modelo.pdf"
+	}
+
+	c.Set("Content-Type", contentType)
+	c.Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
+	return c.SendStream(obj, int(info.Size))
 }
 
 func CreateTemplate(c *fiber.Ctx) error {
@@ -403,13 +530,18 @@ func GetTeamUsers(c *fiber.Ctx) error {
 	for _, u := range users {
 		p := profileByUser[u.ID]
 		resp = append(resp, fiber.Map{
-			"id":            u.ID,
-			"email":         u.Email,
-			"role":          u.Role,
-			"hierarchy":     p.Hierarchy,
-			"department_id": p.DepartmentID,
-			"full_name":     p.FullName,
-			"active":        p.Active || p.ID == uuid.Nil,
+			"id":                       u.ID,
+			"email":                    u.Email,
+			"role":                     u.Role,
+			"hierarchy":                p.Hierarchy,
+			"department_id":            p.DepartmentID,
+			"full_name":                p.FullName,
+			"external_collaborator_id": p.ExternalCollaboratorID,
+			"external_department_id":   p.ExternalDepartmentID,
+			"external_department_name": p.ExternalDepartmentName,
+			"external_cargo_id":        p.ExternalCargoID,
+			"external_cargo_name":      p.ExternalCargoName,
+			"active":                   p.Active || p.ID == uuid.Nil,
 		})
 	}
 	return c.JSON(fiber.Map{"users": resp})
@@ -421,11 +553,16 @@ func CreateTeamUser(c *fiber.Ctx) error {
 		return c.Status(403).JSON(fiber.Map{"error": err.Error()})
 	}
 	var req struct {
-		FullName     string `json:"full_name"`
-		Email        string `json:"email"`
-		Password     string `json:"password"`
-		Hierarchy    string `json:"hierarchy"`
-		DepartmentID string `json:"department_id"`
+		FullName               string `json:"full_name"`
+		Email                  string `json:"email"`
+		Password               string `json:"password"`
+		Hierarchy              string `json:"hierarchy"`
+		DepartmentID           string `json:"department_id"`
+		ExternalCollaboratorID *int64 `json:"external_collaborator_id"`
+		ExternalDepartmentID   *int64 `json:"external_department_id"`
+		ExternalDepartmentName string `json:"external_department_name"`
+		ExternalCargoID        *int64 `json:"external_cargo_id"`
+		ExternalCargoName      string `json:"external_cargo_name"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Dados inválidos"})
@@ -433,9 +570,13 @@ func CreateTeamUser(c *fiber.Ctx) error {
 	if req.Password == "" {
 		req.Password = "123456"
 	}
+	hierarchy := strings.TrimSpace(req.Hierarchy)
+	if hierarchy == "" {
+		hierarchy = inferHierarchyFromCargo(req.ExternalCargoName)
+	}
 	hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	role := "user"
-	if req.Hierarchy == "owner" || req.Hierarchy == "gestor" {
+	if hierarchy == "owner" || hierarchy == "gestor" {
 		role = "company_admin"
 	}
 	user := models.User{
@@ -452,30 +593,46 @@ func CreateTeamUser(c *fiber.Ctx) error {
 		depID = &parsed
 	}
 	profile := models.Profile{
-		UserID:       user.ID,
-		CompanyID:    companyID,
-		FullName:     strings.TrimSpace(req.FullName),
-		Hierarchy:    strings.TrimSpace(req.Hierarchy),
-		DepartmentID: depID,
-		Active:       true,
-	}
-	if profile.Hierarchy == "" {
-		profile.Hierarchy = "user"
+		UserID:                 user.ID,
+		CompanyID:              companyID,
+		FullName:               strings.TrimSpace(req.FullName),
+		Hierarchy:              hierarchy,
+		DepartmentID:           depID,
+		ExternalCollaboratorID: req.ExternalCollaboratorID,
+		ExternalDepartmentID:   req.ExternalDepartmentID,
+		ExternalDepartmentName: strings.TrimSpace(req.ExternalDepartmentName),
+		ExternalCargoID:        req.ExternalCargoID,
+		ExternalCargoName:      strings.TrimSpace(req.ExternalCargoName),
+		Active:                 true,
 	}
 	config.DB.Create(&profile)
+	replaceUserPermissions(user.ID, currentUserID(c), defaultPermissionsForHierarchy(profile.Hierarchy))
 	return c.Status(201).JSON(fiber.Map{"user": user, "profile": profile, "password": req.Password})
 }
 
 func UpdateTeamUser(c *fiber.Ctx) error {
+	companyID, err := currentCompanyID(c)
+	if err != nil {
+		return c.Status(403).JSON(fiber.Map{"error": err.Error()})
+	}
 	userID, err := uuid.Parse(c.Params("id"))
 	if err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "ID inválido"})
 	}
+	var user models.User
+	if err := config.DB.Where("id = ? AND company_id = ?", userID, companyID).First(&user).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Usuário não encontrado"})
+	}
 	var req struct {
-		Active       *bool  `json:"active"`
-		Hierarchy    string `json:"hierarchy"`
-		DepartmentID string `json:"department_id"`
-		FullName     string `json:"full_name"`
+		Active                 *bool   `json:"active"`
+		Hierarchy              string  `json:"hierarchy"`
+		DepartmentID           string  `json:"department_id"`
+		FullName               string  `json:"full_name"`
+		ExternalCollaboratorID *int64  `json:"external_collaborator_id"`
+		ExternalDepartmentID   *int64  `json:"external_department_id"`
+		ExternalDepartmentName *string `json:"external_department_name"`
+		ExternalCargoID        *int64  `json:"external_cargo_id"`
+		ExternalCargoName      *string `json:"external_cargo_name"`
 	}
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(400).JSON(fiber.Map{"error": "Dados inválidos"})
@@ -489,6 +646,8 @@ func UpdateTeamUser(c *fiber.Ctx) error {
 	}
 	if req.Hierarchy != "" {
 		profile.Hierarchy = req.Hierarchy
+	} else if req.ExternalCargoName != nil && strings.TrimSpace(*req.ExternalCargoName) != "" {
+		profile.Hierarchy = inferHierarchyFromCargo(*req.ExternalCargoName)
 	}
 	if req.FullName != "" {
 		profile.FullName = req.FullName
@@ -498,8 +657,105 @@ func UpdateTeamUser(c *fiber.Ctx) error {
 			profile.DepartmentID = &parsed
 		}
 	}
+	if req.ExternalCollaboratorID != nil {
+		profile.ExternalCollaboratorID = req.ExternalCollaboratorID
+	}
+	if req.ExternalDepartmentID != nil {
+		profile.ExternalDepartmentID = req.ExternalDepartmentID
+	}
+	if req.ExternalDepartmentName != nil {
+		profile.ExternalDepartmentName = strings.TrimSpace(*req.ExternalDepartmentName)
+	}
+	if req.ExternalCargoID != nil {
+		profile.ExternalCargoID = req.ExternalCargoID
+	}
+	if req.ExternalCargoName != nil {
+		profile.ExternalCargoName = strings.TrimSpace(*req.ExternalCargoName)
+	}
 	config.DB.Save(&profile)
+	if req.Hierarchy != "" || (req.ExternalCargoName != nil && strings.TrimSpace(*req.ExternalCargoName) != "") {
+		if profile.Hierarchy == "owner" || profile.Hierarchy == "gestor" {
+			user.Role = "company_admin"
+		} else {
+			user.Role = "user"
+		}
+		config.DB.Save(&user)
+		replaceUserPermissions(user.ID, currentUserID(c), defaultPermissionsForHierarchy(profile.Hierarchy))
+	}
 	return c.JSON(profile)
+}
+
+func ResetTeamUserPassword(c *fiber.Ctx) error {
+	companyID, err := currentCompanyID(c)
+	if err != nil {
+		return c.Status(403).JSON(fiber.Map{"error": err.Error()})
+	}
+	userID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "ID inválido"})
+	}
+	var user models.User
+	if err := config.DB.Where("id = ? AND company_id = ?", userID, companyID).First(&user).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Usuário não encontrado"})
+	}
+
+	var req struct {
+		NewPassword string `json:"new_password"`
+	}
+	_ = c.BodyParser(&req)
+
+	newPass := strings.TrimSpace(req.NewPassword)
+	if newPass == "" {
+		newPass = "Time@" + randomHex(3)
+	}
+	hashed, _ := bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost)
+	user.Password = string(hashed)
+	if err := config.DB.Save(&user).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao redefinir senha"})
+	}
+
+	return c.JSON(fiber.Map{
+		"message":            "Senha redefinida com sucesso",
+		"temporary_password": newPass,
+		"user_id":            user.ID,
+		"email":              user.Email,
+	})
+}
+
+func DeleteTeamUser(c *fiber.Ctx) error {
+	companyID, err := currentCompanyID(c)
+	if err != nil {
+		return c.Status(403).JSON(fiber.Map{"error": err.Error()})
+	}
+	userID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(400).JSON(fiber.Map{"error": "ID inválido"})
+	}
+	currentID := currentUserID(c)
+	if userID == currentID {
+		return c.Status(400).JSON(fiber.Map{"error": "Você não pode remover seu próprio usuário"})
+	}
+
+	var user models.User
+	if err := config.DB.Where("id = ? AND company_id = ?", userID, companyID).First(&user).Error; err != nil {
+		return c.Status(404).JSON(fiber.Map{"error": "Usuário não encontrado"})
+	}
+
+	var profile models.Profile
+	if err := config.DB.Where("user_id = ?", userID).First(&profile).Error; err == nil {
+		if profile.Hierarchy == "owner" {
+			return c.Status(400).JSON(fiber.Map{"error": "Não é permitido remover usuário proprietário"})
+		}
+		profile.Active = false
+		config.DB.Save(&profile)
+	}
+
+	config.DB.Where("user_id = ?", userID).Delete(&models.UserPermission{})
+	if err := config.DB.Delete(&models.User{}, "id = ? AND company_id = ?", userID, companyID).Error; err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": "Falha ao remover usuário"})
+	}
+
+	return c.JSON(fiber.Map{"message": "Usuário removido do time"})
 }
 
 func GetUserPermissions(c *fiber.Ctx) error {
