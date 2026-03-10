@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Verificação Facial</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0A111F;--surface:#0d1a2d;--border:rgba(0,196,204,0.2);--cyan:#00C4CC;--text:#FFFFFF;--muted:#808FA3;--card:#111d30}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);padding:clamp(16px, 5vw, 40px);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+h1{font-size:clamp(20px, 6vw, 26px);font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;text-align:center}
+.subtitle{color:var(--muted);font-size:clamp(12px, 3.5vw, 14px);margin-bottom:28px;text-align:center}
+
+.stepper{display:flex;align-items:center;gap:0;margin-bottom:32px;width:100%;max-width:400px;justify-content:center}
+.step{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.step-circle{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;transition:all .3s}
+.step-circle.pending{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid rgba(255,255,255,.12)}
+.step-circle.active{background:var(--cyan);color:#000;box-shadow:0 0 16px var(--cyan)}
+.step-circle.done{background:var(--cyan);color:#000}
+.step-label{font-size:12px;font-weight:600}
+.step-label.active-label{color:var(--cyan)}
+.step-label.pending-label{color:var(--muted)}
+.step-line{flex:1;height:2px;background:rgba(255,255,255,.08);margin:0 6px;max-width:40px;transition:background .3s}
+.step-line.done{background:var(--cyan)}
+
+/* Instructions */
+.instructions{display:flex;flex-direction:column;gap:12px;max-width:520px;margin-bottom:28px}
+.instruction-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:12px;transition:all .2s;width:100%}
+.instruction-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,196,204,0.1)}
+.inst-icon{font-size:22px;flex-shrink:0}
+.inst-title{font-size:13px;font-weight:700;margin-bottom:2px;color:var(--cyan)}
+.inst-desc{font-size:12px;color:var(--muted)}
+
+/* Camera */
+.camera-container{max-width:540px;display:none}
+.camera-frame{width:100%;height:clamp(300px, 60vh, 440px);background:#000;border-radius:20px;overflow:hidden;position:relative;border:1px solid var(--border);margin-bottom:20px}
+.camera-frame video{width:100%;height:100%;object-fit:cover}
+/* Oval HUD */
+.oval-hud{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.oval-ring{width:min(230px, 60vw);height:min(300px, 80vw);border:2.5px solid white;border-radius:50%;transition:border-color .5s,box-shadow .5s;position:relative}
+.oval-ring::before{content:'';position:absolute;inset:-6px;border:1.5px solid rgba(255,255,255,0.15);border-radius:50%}
+.oval-ring::after{content:'';position:absolute;inset:-12px;border:1px solid rgba(255,255,255,0.07);border-radius:50%}
+.oval-ring.locked{border-color:var(--cyan);box-shadow:0 0 20px var(--cyan),inset 0 0 20px rgba(0,196,204,0.1)}
+/* crosshair lines */
+.crosshair{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.crosshair::before,.crosshair::after{content:'';position:absolute;background:rgba(0,196,204,0.2)}
+.crosshair::before{width:100%;height:1px}
+.crosshair::after{width:1px;height:100%}
+.hud-label{position:absolute;top:-30px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:13px;font-weight:600;color:white;transition:color .5s}
+.hud-label.locked{color:var(--cyan)}
+.lock-badge{position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);font-size:13px;font-weight:700;background:rgba(0,196,204,0.15);border:1px solid var(--cyan);border-radius:20px;padding:6px 16px;color:var(--cyan);white-space:nowrap;display:none}
+
+.btn{padding:14px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:transparent;color:var(--text);font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;flex:1}
+.btn:hover{background:rgba(255,255,255,.05)}
+.btn-primary{border:none;background:var(--cyan);color:#000;animation:pulse-c 2.5s ease-in-out infinite;box-shadow:0 4px 12px rgba(0,196,204,0.3)}
+.btn-primary:hover{opacity:0.9;animation:none;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;animation:none;cursor:not-allowed}
+.spinner{width:16px;height:16px;border:2px solid rgba(0,0,0,0.2);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse-c{0%,100%{box-shadow:0 0 0 0 rgba(0,196,204,0)}50%{box-shadow:0 0 0 8px rgba(0,196,204,0)}}
+.btn-row{display:flex;gap:12px;width:100%;max-width:400px}
+
+.error-box{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;color:#f87171;font-size:13px;margin-bottom:14px;display:none}
+.loading-overlay{position:fixed;inset:0;background:rgba(10,17,31,.9);display:none;align-items:center;justify-content:center;z-index:9999}
+.loading-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;text-align:center;min-width:220px}
+.loading-card .spinner{margin:0 auto 12px;display:block}
+.loading-title{font-weight:700;color:var(--cyan);margin-bottom:6px}
+.loading-sub{font-size:13px;color:var(--muted)}
+
+/* Success */
+.success-screen{display:none;max-width:540px}
+.success-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:48px 32px;text-align:center}
+.shield-wrap{position:relative;width:100px;height:100px;margin:0 auto 28px}
+.shield-svg{width:100px;height:100px;animation:pop-in .6s cubic-bezier(0.175,0.885,0.32,1.275) both}
+@keyframes pop-in{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
+.confetti-container{position:absolute;inset:-40px;pointer-events:none;overflow:visible}
+.confetti{position:absolute;width:7px;height:7px;border-radius:2px;animation:fall 2.5s ease-in-out infinite}
+@keyframes fall{0%{transform:translateY(-20px) rotate(0);opacity:1}100%{transform:translateY(100px) rotate(360deg);opacity:0}}
+</style>
+</head>
+<body>
+
+<div class="stepper">
+  <div class="step"><div class="step-circle active" id="s1">📋</div><span class="step-label active-label" id="sl1">Instruções</span></div>
+  <div class="step-line" id="l1"></div>
+  <div class="step"><div class="step-circle pending" id="s2">📷</div><span class="step-label pending-label" id="sl2">Câmera</span></div>
+  <div class="step-line" id="l2"></div>
+  <div class="step"><div class="step-circle pending" id="s3">✅</div><span class="step-label pending-label" id="sl3">Captura</span></div>
+</div>
+
+<!-- Step 1: Instructions -->
+<div id="step1">
+  <h1>Verificação Facial</h1>
+  <p class="subtitle">Siga as instruções abaixo para uma validação precisa.</p>
+  <div class="instructions">
+    <div class="instruction-card"><div class="inst-icon">📱</div><div><div class="inst-title">Centralize o rosto</div><div class="inst-desc">Posicione dentro da área demarcada na tela.</div></div></div>
+    <div class="instruction-card"><div class="inst-icon">☀️</div><div><div class="inst-title">Boa iluminação</div><div class="inst-desc">Fique em um ambiente claro e sem luz atrás de você.</div></div></div>
+    <div class="instruction-card"><div class="inst-icon">🚫</div><div><div class="inst-title">Sem acessórios</div><div class="inst-desc">Retire óculos escuros, bonés ou máscaras.</div></div></div>
+  </div>
+  <button class="btn btn-primary" style="max-width:520px" onclick="goCamera()">Iniciar Selfie</button>
+</div>
+
+<!-- Step 2: Camera -->
+<div id="step2" class="camera-container">
+  <h1>Reconhecimento Facial</h1>
+  <p class="subtitle">Posicione seu rosto no centro do círculo (v2.6)</p>
+  <div class="camera-frame">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="analysisCanvas" style="display:none"></canvas>
+    <div class="oval-hud">
+      <div style="position:relative">
+        <div class="oval-ring" id="ovalRing">
+          <div class="crosshair"></div>
+        </div>
+        <div class="hud-label" id="hudLabel">Centralize o rosto</div>
+        <div class="lock-badge" id="lockBadge">✅ Rosto detectado e alinhado! 🎯</div>
+      </div>
+    </div>
+  </div>
+  <div id="errBox" class="error-box"></div>
+  <div class="btn-row">
+    <button class="btn" onclick="goBack()">Voltar</button>
+    <button class="btn btn-primary" id="btnCap" onclick="capture()" disabled>Capturar e Enviar</button>
+  </div>
+</div>
+
+<!-- Step 3: Success -->
+<div class="success-screen" id="successScreen">
+  <div class="success-card">
+    <div class="shield-wrap">
+      <svg class="shield-svg" viewBox="0 0 80 80" fill="none">
+        <circle cx="40" cy="40" r="36" fill="rgba(0,196,204,0.08)" stroke="#00C4CC" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <path d="M40 10L16 22v20c0 13 10 24.5 24 28 14-3.5 24-15 24-28V22L40 10z" fill="rgba(0,196,204,0.12)" stroke="#00C4CC" stroke-width="2"/>
+        <path d="M28 40l9 9 15-15" stroke="#00C4CC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="confetti-container" id="confettiContainer"></div>
+    </div>
+    <h2 style="font-size:22px;font-weight:800;color:var(--cyan);margin-bottom:8px">Identidade Verificada!</h2>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:32px">Sua selfie foi capturada e salva com segurança.</p>
+    <button class="btn btn-primary" style="max-width:220px;margin:0 auto" onclick="restart()">Nova Verificação</button>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-card">
+    <span class="spinner"></span>
+    <div class="loading-title">Enviando selfie</div>
+    <div class="loading-sub">Aguarde alguns segundos...</div>
+  </div>
+</div>
+
+<script src="valeris-sdk.js?v=2.6"></script>
+<script>
+const selfieParams = new URLSearchParams(window.location.search);
+ValerisSDK.init({
+  apiUrl: selfieParams.get('apiUrl') || '/api',
+  token: selfieParams.get('token') || 'portal-demo'
+});
+let stream, alignLoop=null, faceDetector=null, alignedSince=0, faceAligned=false, submitting=false;
+
+function setStep(n){
+  [1,2,3].forEach(i=>{
+    document.getElementById('s'+i).className='step-circle '+(i<n?'done':i===n?'active':'pending');
+    document.getElementById('sl'+i).className='step-label '+(i<=n?'active-label':'pending-label');
+    if(i<3)document.getElementById('l'+i).className='step-line'+(i<n?' done':'');
+  });
+}
+
+function showError(msg){const b=document.getElementById('errBox');b.textContent=msg;b.style.display='block';setTimeout(()=>b.style.display='none',7000);}
+function showLoading(){document.getElementById('loadingOverlay').style.display='flex';}
+function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
+
+function stopAlignment(){
+  if(alignLoop){ cancelAnimationFrame(alignLoop); alignLoop=null; }
+}
+
+function evaluateFaceFallback(imgData){
+  const {data}=imgData; let skin=0,total=0;
+  for(let i=0;i<data.length;i+=12){
+    const r=data[i],g=data[i+1],b=data[i+2];
+    if (r>60 && g>35 && b>20 && r>g && g>b && (r-b)>15) skin++;
+    total++;
+  }
+  return (skin/Math.max(1,total))>0.12;
+}
+
+function startAlignment(){
+  stopAlignment();
+  alignedSince=0; faceAligned=false;
+  const video=document.getElementById('video');
+  const canvas=document.getElementById('analysisCanvas');
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+  const btn=document.getElementById('btnCap');
+  const ring=document.getElementById('ovalRing'),label=document.getElementById('hudLabel'),badge=document.getElementById('lockBadge');
+  btn.disabled=true;
+
+  const loop = async () => {
+    if(!video.srcObject || video.videoWidth<2 || video.videoHeight<2){ alignLoop=requestAnimationFrame(loop); return; }
+    canvas.width=320; canvas.height=Math.max(180,Math.floor((video.videoHeight/video.videoWidth)*320));
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+    let ok = evaluateFaceFallback(imgData);
+    if(faceDetector){
+      try{
+        const faces=await faceDetector.detect(video);
+        ok = !!(faces && faces.length);
+      }catch(_){}
+    }
+    faceAligned=ok;
+    ring.classList.toggle('locked',ok); label.classList.toggle('locked',ok);
+    if(ok){
+      if(!alignedSince) alignedSince=Date.now();
+      const stable = Date.now()-alignedSince;
+      label.textContent = stable>=700 ? 'Alinhado!' : 'Mantenha parado...';
+      if(stable>=700){ badge.style.display='block'; btn.disabled=false; setTimeout(()=>{badge.style.display='none';},1500); }
+      else { btn.disabled=true; }
+    }else{
+      alignedSince=0; label.textContent='Centralize o rosto'; badge.style.display='none'; btn.disabled=true;
+    }
+    alignLoop=requestAnimationFrame(loop);
+  };
+  alignLoop=requestAnimationFrame(loop);
+}
+
+async function goCamera(){
+  document.getElementById('step1').style.display='none';
+  document.getElementById('step2').style.display='block';
+  setStep(2);
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});
+    const video=document.getElementById('video');
+    video.srcObject=stream; await video.play();
+    if('FaceDetector' in window){ try{ faceDetector=new FaceDetector({fastMode:true,maxDetectedFaces:1}); }catch(_){ faceDetector=null; } }
+    startAlignment();
+  }catch(e){showError('Câmera indisponível: '+e.message);}
+}
+
+function goBack(){
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  stopAlignment();
+  submitting=false;
+  hideLoading();
+  document.getElementById('step1').style.display='block';
+  document.getElementById('step2').style.display='none';
+  setStep(1);
+}
+
+async function capture(){
+  if(submitting) return;
+  if(!faceAligned || !alignedSince || (Date.now()-alignedSince)<700){ showError('Alinhe o rosto para capturar.'); return; }
+  const v=document.getElementById('video');if(!v.srcObject)return;
+  const c=document.createElement('canvas');c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  const dataUrl=c.toDataURL('image/jpeg',0.88);
+  v.srcObject.getTracks().forEach(t=>t.stop());
+  stopAlignment();
+
+  const btn=document.getElementById('btnCap');btn.innerHTML='<span class="spinner"></span> Enviando...';btn.disabled=true; submitting=true; showLoading();
+
+  const val=await ValerisSDK.validation.face(dataUrl);
+  if(!val.isValid){showError('Aviso: '+val.reasons[0]+' Tente novamente.');btn.textContent='Capturar e Enviar';btn.disabled=true;submitting=false;hideLoading();goCamera();return;}
+
+  try{
+    const geo=await ValerisSDK.getGeolocation();
+    const dev=await ValerisSDK.getDeviceInfo();
+    const meta={...geo,...dev,serviceType:'Verificação Facial',confidence:val.confidence};
+    const composite=await ValerisSDK.generateComposite([{label:'Selfie',dataUrl}],meta);
+    await ValerisSDK.submitCapture('selfie',composite,meta);
+    document.getElementById('step2').style.display='none';
+    document.getElementById('successScreen').style.display='block';
+    setStep(3); spawnConfetti();
+  }catch(e){
+    showError('Erro ao enviar: '+e.message);
+    btn.textContent='Capturar e Enviar';btn.disabled=true;
+    goCamera();
+  }finally{
+    submitting=false;
+    hideLoading();
+  }
+}
+
+function spawnConfetti(){
+  const c=document.getElementById('confettiContainer');c.innerHTML='';
+  for(let i=0;i<18;i++){
+    const el=document.createElement('div');el.className='confetti';
+    el.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*10}%;background:${'#00C4CC,#FFFFFF,#a5f3fc'.split(',')[i%3]};animation-delay:${Math.random()*1.5}s;animation-duration:${1.5+Math.random()}s`;
+    c.appendChild(el);
+  }
+}
+
+function restart(){
+  document.getElementById('step1').style.display='block';
+  document.getElementById('successScreen').style.display='none';
+  setStep(1);
+  document.getElementById('btnCap').disabled=true;
+  submitting=false;
+  hideLoading();
+}
+</script>
+</body>
+</html>

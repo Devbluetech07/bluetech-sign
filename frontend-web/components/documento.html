@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Captura de Documento v2.5</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0A111F;--surface:#0d1a2d;--border:rgba(0,255,136,0.2);--green:#00FF88;--green10:rgba(0,255,136,0.1);--text:#FFFFFF;--muted:#808FA3;--card:#111d30}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);padding:clamp(16px, 5vw, 40px);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+h1{font-size:clamp(20px, 6vw, 26px);font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;text-align:center}
+.subtitle{color:var(--muted);font-size:clamp(12px, 3.5vw, 14px);margin-bottom:28px;text-align:center}
+
+/* Stepper */
+.stepper{display:flex;align-items:center;gap:0;margin-bottom:32px;width:100%;max-width:480px;justify-content:center;padding:0 8px}
+.step{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.step-circle{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;transition:all .3s;flex-shrink:0}
+.step-circle.pending{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid rgba(255,255,255,.12)}
+.step-circle.active{background:var(--green);color:#000;box-shadow:0 0 16px var(--green)}
+.step-circle.done{background:var(--green);color:#000}
+.step-label{font-size:12px;font-weight:600}
+.step-label.active-label{color:var(--green)}
+.step-label.pending-label{color:var(--muted)}
+.step-line{flex:1;height:2px;background:rgba(255,255,255,.08);margin:0 4px;max-width:32px;transition:background .3s}
+.step-line.done{background:var(--green)}
+
+/* Doc grid */
+.doc-grid{display:grid;grid-template-columns:repeat(auto-fit, minmax(105px, 1fr));gap:10px;margin-bottom:32px;width:100%;max-width:520px}
+.doc-card{background:var(--card);border:1px solid rgba(0,255,136,0.15);border-radius:16px;padding:16px 8px;text-align:center;cursor:pointer;transition:all .25s;display:flex;flex-direction:column;align-items:center;gap:6px}
+.doc-card:hover{border-color:var(--green);background:var(--green10);transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,255,136,0.15)}
+.doc-icon{font-size:32px}
+.doc-name{font-size:14px;font-weight:700;color:var(--green)}
+
+/* Camera */
+.camera-container{max-width:620px;display:none;width:100%}
+.camera-frame{width:100%;height:clamp(200px, 45vh, 320px);background:#000;border-radius:20px;overflow:hidden;position:relative;border:1px solid rgba(0,255,136,0.15);margin-bottom:16px}
+.camera-frame video{width:100%;height:100%;object-fit:cover}
+.hud-overlay{position:absolute;inset:0;pointer-events:none}
+.corner{position:absolute;width:28px;height:28px;border-color:white;border-style:solid;transition:all .5s}
+.corner.tl{top:16px;left:16px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
+.corner.tr{top:16px;right:16px;border-width:3px 3px 0 0;border-radius:0 4px 0 0}
+.corner.bl{bottom:16px;left:16px;border-width:0 0 3px 3px;border-radius:0 0 0 4px}
+.corner.br{bottom:16px;right:16px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
+.corner.locked{border-color:var(--green);box-shadow:0 0 10px var(--green)}
+.hud-status{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.6);padding:8px 16px;border-radius:20px}
+.hud-feedback{
+  position:absolute;
+  top:12px;
+  right:12px;
+  background:rgba(0,0,0,0.55);
+  border:1px solid rgba(255,255,255,0.2);
+  border-radius:10px;
+  padding:8px 10px;
+  font-size:12px;
+  font-weight:700;
+  color:var(--muted);
+}
+.hud-feedback.ok{color:#d1fae5}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;animation:blink 1s ease-in-out infinite}
+.status-dot.locked{background:var(--green);animation:none;box-shadow:0 0 8px var(--green)}
+
+/* Success Overlay */
+#photoSavedOverlay{display:none; position:fixed; inset:0; background:rgba(10,17,31,0.95); z-index:9999; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px}
+
+/* UI Components */
+.btn{padding:14px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:transparent;color:var(--text);font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;flex:1}
+.btn-primary{border:none;background:var(--green);color:#000;box-shadow:0 4px 12px rgba(0,255,136,0.3)}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.btn-row{display:flex;gap:12px;margin-top:8px;width:100%}
+.error-box{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px 16px;color:#f87171;font-size:13px;margin-bottom:14px;display:none;text-align:center;width:100%}
+.spinner{width:16px;height:16px;border:2px solid rgba(0,0,0,0.2);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* Success Area */
+.success-screen{display:none;max-width:620px}
+.success-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:48px 32px;text-align:center}
+.loading-overlay{display:none;position:fixed;inset:0;background:rgba(10,17,31,.9);z-index:9999;align-items:center;justify-content:center}
+.loading-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;text-align:center;min-width:220px}
+.loading-card .spinner{margin:0 auto 12px;display:block}
+.loading-title{font-weight:700;color:var(--green);margin-bottom:6px}
+.loading-sub{font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="stepper">
+  <div class="step"><div class="step-circle active" id="s1">📄</div><span class="step-label active-label" id="sl1">Tipo</span></div>
+  <div class="step-line" id="l1"></div>
+  <div class="step"><div class="step-circle pending" id="s2">📸</div><span class="step-label pending-label" id="sl2">Frente</span></div>
+  <div class="step-line" id="l2"></div>
+  <div class="step"><div class="step-circle pending" id="s3">🔄</div><span class="step-label pending-label" id="sl3">Verso</span></div>
+  <div class="step-line" id="l3"></div>
+  <div class="step"><div class="step-circle pending" id="s4">✅</div><span class="step-label pending-label" id="sl4">Sucesso</span></div>
+</div>
+
+<div id="step1">
+  <h1>Captura de Documento</h1>
+  <p class="subtitle">Selecione o documento (v2.5)</p>
+  <div class="doc-grid">
+    <div class="doc-card" onclick="startCapture('RG')"><div class="doc-icon">🪪</div><span class="doc-name">RG</span></div>
+    <div class="doc-card" onclick="startCapture('CNH')"><div class="doc-icon">🚗</div><span class="doc-name">CNH</span></div>
+    <div class="doc-card" onclick="startCapture('Passaporte')"><div class="doc-icon">✈️</div><span class="doc-name">Passaporte</span></div>
+  </div>
+</div>
+
+<div id="cameraArea" class="camera-container">
+  <h1 id="capTitle">Frente do Documento</h1>
+  <p class="subtitle" id="capHint">Posicione o documento de forma legível.</p>
+
+  <div class="camera-frame">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="analysisCanvas" style="display:none"></canvas>
+    <div class="hud-overlay">
+      <div class="corner tl" id="cTL"></div><div class="corner tr" id="cTR"></div>
+      <div class="corner bl" id="cBL"></div><div class="corner br" id="cBR"></div>
+      <div class="hud-feedback" id="docFeedback">Documento: ajustar</div>
+      <div class="hud-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Buscando documento...</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="errBox" class="error-box"></div>
+  <div class="btn-row">
+    <button class="btn" onclick="cancelCapture()">Cancelar</button>
+    <button class="btn btn-primary" id="btnCap" onclick="handleCapture()" disabled>📸 Capturar Foto</button>
+  </div>
+</div>
+
+<div id="photoSavedOverlay">
+  <div style="width:70px;height:70px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:15px">
+    <svg style="width:35px;height:35px;color:#000" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="4" d="M5 13l4 4L19 7"/></svg>
+  </div>
+  <h2 style="color:var(--green)">Frente Salva!</h2>
+  <p>Vire para o <b>verso</b> agora.</p>
+</div>
+
+<div class="success-screen" id="successScreen">
+  <div class="success-card">
+    <h2 style="color:var(--green);margin-bottom:10px">Captura Concluída!</h2>
+    <p class="subtitle">Seus documentos foram enviados com sucesso.</p>
+  </div>
+</div>
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-card">
+    <span class="spinner"></span>
+    <div class="loading-title">Enviando documento</div>
+    <div class="loading-sub">Aguarde alguns segundos...</div>
+  </div>
+</div>
+
+<script src="valeris-sdk.js?v=2.6"></script>
+<script>
+const documentoParams = new URLSearchParams(window.location.search);
+ValerisSDK.init({
+  apiUrl: documentoParams.get('apiUrl') || '/api',
+  token: documentoParams.get('token') || 'portal-demo'
+});
+let stream, selectedMode, currentStep=1, imgFrente=null, lockTimeout;
+let detectLoop = null;
+let docAligned = false;
+let alignedSince = 0;
+let poorCameraMode = false;
+let submitting = false;
+let reloadTimer = null;
+
+function setStep(n){
+  [1,2,3,4].forEach(i=>{
+    const s=document.getElementById('s'+i), sl=document.getElementById('sl'+i);
+    if(s) s.className='step-circle '+(i<n?'done':i===n?'active':'pending');
+    if(sl) sl.className='step-label '+(i<=n?'active-label':'pending-label');
+    if(i<4){const l=document.getElementById('l'+i); if(l)l.className='step-line'+(i<n?' done':'');}
+  });
+}
+
+function showError(msg){
+  const b=document.getElementById('errBox');
+  b.textContent = msg;
+  b.style.display = 'block';
+  setTimeout(()=> b.style.display='none', 6000);
+}
+function showLoading(){document.getElementById('loadingOverlay').style.display='flex';}
+function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
+function clearReloadTimer(){ if(reloadTimer){ clearTimeout(reloadTimer); reloadTimer = null; } }
+
+async function startCapture(mode){
+  selectedMode = mode;
+  currentStep = 2;
+  document.getElementById('step1').style.display='none';
+  document.getElementById('cameraArea').style.display='block';
+  document.getElementById('capTitle').textContent = 'Frente do Documento';
+  setStep(2);
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    await video.play();
+    const track = stream.getVideoTracks()[0];
+    const settings = track ? track.getSettings() : {};
+    poorCameraMode = !!(settings && ((settings.width && settings.width <= 640) || (settings.frameRate && settings.frameRate <= 20)));
+    document.getElementById('btnCap').disabled = true;
+    startDocumentDetection();
+  }catch(e){
+    showError("Erro na câmera: "+e.message);
+  }
+}
+
+function getDocumentROI(videoEl){
+  const tl = document.getElementById('cTL').getBoundingClientRect();
+  const tr = document.getElementById('cTR').getBoundingClientRect();
+  const bl = document.getElementById('cBL').getBoundingClientRect();
+  const v = videoEl.getBoundingClientRect();
+  const left = tl.left + tl.width / 2;
+  const right = tr.left + tr.width / 2;
+  const top = tl.top + tl.height / 2;
+  const bottom = bl.top + bl.height / 2;
+  return {
+    x: (left - v.left) / v.width,
+    y: (top - v.top) / v.height,
+    w: (right - left) / v.width,
+    h: (bottom - top) / v.height
+  };
+}
+
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+function evaluateDocumentPresence(imgData, roi){
+  const { data, width, height } = imgData;
+  const x0 = clamp(Math.floor(roi.x * width), 0, width - 2);
+  const y0 = clamp(Math.floor(roi.y * height), 0, height - 2);
+  const rw = clamp(Math.floor(roi.w * width), 8, width - x0 - 1);
+  const rh = clamp(Math.floor(roi.h * height), 8, height - y0 - 1);
+  let edgeCount = 0, bright = 0, sq = 0, samples = 0, greenish = 0, skinLike = 0, darkPixels = 0, veryBrightPixels = 0;
+  for(let y = y0 + 1; y < y0 + rh - 1; y += 2){
+    for(let x = x0 + 1; x < x0 + rw - 1; x += 2){
+      const i = (y * width + x) * 4;
+      const r = data[i], g = data[i+1], b = data[i+2];
+      const gray = (r + g + b) / 3;
+      const ix = (y * width + (x - 1)) * 4;
+      const iy = ((y - 1) * width + x) * 4;
+      const gx = Math.abs(gray - ((data[ix] + data[ix+1] + data[ix+2]) / 3));
+      const gy = Math.abs(gray - ((data[iy] + data[iy+1] + data[iy+2]) / 3));
+      if (gx + gy > 24) edgeCount++;
+      if (g > r * 1.06 && g > b * 1.04 && (g - r) > 6) greenish++;
+      if (r > 60 && g > 35 && b > 20 && r > g && g > b && (r - b) > 15) skinLike++;
+      if (gray < 45) darkPixels++;
+      if (gray > 215) veryBrightPixels++;
+      bright += gray;
+      sq += gray * gray;
+      samples++;
+    }
+  }
+  const edgeDensity = edgeCount / Math.max(1, samples);
+  const avgBrightness = bright / Math.max(1, samples);
+  const variance = (sq / Math.max(1, samples)) - (avgBrightness * avgBrightness);
+  const stdDev = Math.sqrt(Math.max(0, variance));
+  const greenRatio = greenish / Math.max(1, samples);
+  const skinRatio = skinLike / Math.max(1, samples);
+  const darkRatio = darkPixels / Math.max(1, samples);
+  const brightRatio = veryBrightPixels / Math.max(1, samples);
+  const likelyFaceOrHand = skinRatio > (poorCameraMode ? 0.40 : 0.30);
+  const textureOk = stdDev > (poorCameraMode ? 14 : 22) && edgeDensity > (poorCameraMode ? 0.085 : 0.14);
+  const exposureOk = poorCameraMode
+    ? (avgBrightness > 26 && avgBrightness < 245 && darkRatio < 0.68 && brightRatio < 0.90)
+    : (avgBrightness > 35 && avgBrightness < 236 && darkRatio < 0.55 && brightRatio < 0.78);
+  const cnhHintOk = greenRatio > 0.04 && edgeDensity > 0.075 && stdDev > 14 && skinRatio < 0.33;
+  const lowCamContrastHint = darkRatio > 0.08 && brightRatio > 0.06 && edgeDensity > 0.07 && stdDev > 12 && skinRatio < 0.33;
+  const ok = !likelyFaceOrHand && ((textureOk && exposureOk) || (poorCameraMode && (cnhHintOk || lowCamContrastHint)));
+  return ok;
+}
+
+function updateDocHUD(aligned){
+  const dot=document.getElementById('statusDot'), txt=document.getElementById('statusText');
+  const fb=document.getElementById('docFeedback');
+  const corners=[document.getElementById('cTL'),document.getElementById('cTR'),document.getElementById('cBL'),document.getElementById('cBR')];
+  corners.forEach(c=>c.classList.toggle('locked', aligned));
+  fb.classList.toggle('ok', aligned);
+  fb.textContent = aligned ? 'Documento: ok' : 'Documento: ajustar';
+  const btn = document.getElementById('btnCap');
+  if (aligned) {
+    if (!alignedSince) alignedSince = Date.now();
+    if ((Date.now() - alignedSince) >= 600) {
+      dot.className='status-dot locked';
+      txt.textContent='✅ Documento detectado, pode capturar';
+      btn.disabled = false;
+    } else {
+      dot.className='status-dot';
+      txt.textContent='Mantenha parado...';
+      btn.disabled = true;
+    }
+  } else {
+    alignedSince = 0;
+    dot.className='status-dot';
+    txt.textContent = poorCameraMode ? 'Aproxime e estabilize o documento' : 'Posicione o documento na moldura';
+    btn.disabled = true;
+  }
+}
+
+function stopDocumentDetection(){
+  if (detectLoop) {
+    cancelAnimationFrame(detectLoop);
+    detectLoop = null;
+  }
+}
+
+function startDocumentDetection(){
+  stopDocumentDetection();
+  docAligned = false;
+  alignedSince = 0;
+  updateDocHUD(false);
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('analysisCanvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const loop = () => {
+    if (!video.srcObject || video.videoWidth < 2 || video.videoHeight < 2) {
+      detectLoop = requestAnimationFrame(loop);
+      return;
+    }
+    if (!poorCameraMode && video.videoWidth <= 720) {
+      poorCameraMode = true;
+    }
+    canvas.width = 320;
+    canvas.height = Math.max(180, Math.floor((video.videoHeight / video.videoWidth) * 320));
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const roi = getDocumentROI(video);
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    docAligned = evaluateDocumentPresence(imgData, roi);
+    updateDocHUD(docAligned);
+    detectLoop = requestAnimationFrame(loop);
+  };
+  detectLoop = requestAnimationFrame(loop);
+}
+
+function cancelCapture(){
+  clearReloadTimer();
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  stopDocumentDetection();
+  location.reload();
+}
+
+function handleCapture(){
+  if(submitting) return;
+  if(!docAligned || !alignedSince || (Date.now() - alignedSince) < 600){
+    showError("Mostre o documento dentro da moldura para capturar.");
+    return;
+  }
+  const v=document.getElementById('video');
+  const c=document.createElement('canvas');
+  c.width=v.videoWidth; c.height=v.videoHeight;
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  const dataUrl = c.toDataURL('image/jpeg', 0.9);
+
+  if(currentStep === 2) saveFront(dataUrl);
+  else if(currentStep === 3) saveBack(dataUrl);
+}
+
+async function saveFront(dataUrl){
+  const btn = document.getElementById('btnCap');
+  btn.innerHTML = '<span class="spinner"></span> Validando Frente...';
+  btn.disabled = true;
+
+  const expected = selectedMode === 'RG' ? 'ID' : (selectedMode === 'CNH' ? 'CNH' : 'PASSPORT');
+  const validation = await ValerisSDK.validation.document(dataUrl, expected);
+
+  if(!validation.isValid){
+    showError("Erro Frente: "+(validation.reasons[0]||"Posicione melhor"));
+    btn.innerHTML = '📸 Capturar Foto'; btn.disabled = true;
+    startDocumentDetection();
+    return;
+  }
+
+  imgFrente = dataUrl;
+  btn.innerHTML = '📸 Capturar Foto'; btn.disabled = true;
+  
+  if(selectedMode === 'Passaporte'){
+    finish();
+    return;
+  }
+
+  currentStep = 3;
+  setStep(3);
+  document.getElementById('capTitle').textContent = 'Verso do Documento';
+  document.getElementById('capHint').textContent = 'Agora capture o verso do documento.';
+  startDocumentDetection();
+
+  const ov = document.getElementById('photoSavedOverlay');
+  ov.style.display = 'flex';
+  setTimeout(()=> ov.style.display='none', 2000);
+}
+
+async function saveBack(dataUrl){
+  const btn = document.getElementById('btnCap');
+  btn.innerHTML = '<span class="spinner"></span> Validando Verso...';
+  btn.disabled = true;
+
+  const expected = selectedMode === 'RG' ? 'ID' : (selectedMode === 'CNH' ? 'CNH' : 'PASSPORT');
+  const validation = await ValerisSDK.validation.document(dataUrl, expected);
+
+  if(!validation.isValid){
+    showError("Erro Verso: "+(validation.reasons[0]||"Tente novamente"));
+    btn.innerHTML = '📸 Capturar Foto'; btn.disabled = true;
+    startDocumentDetection();
+    return;
+  }
+
+  finish(dataUrl);
+}
+
+async function finish(imgVerso = null){
+  const btn = document.getElementById('btnCap');
+  if (submitting) return;
+  btn.innerHTML = '<span class="spinner"></span> Enviando...';
+  btn.disabled = true;
+  submitting = true;
+  showLoading();
+
+  try {
+    const geo = await ValerisSDK.getGeolocation();
+    const dev = await ValerisSDK.getDeviceInfo();
+    const meta = {...geo, ...dev, docType: selectedMode};
+    const photos = [{label:'Frente', dataUrl:imgFrente}];
+    if(imgVerso) photos.push({label:'Verso', dataUrl:imgVerso});
+
+    const composite = await ValerisSDK.generateComposite(photos, meta);
+    await ValerisSDK.submitCapture('documento', composite, meta);
+
+    document.getElementById('cameraArea').style.display = 'none';
+    document.getElementById('successScreen').style.display = 'block';
+    setStep(4);
+    stopDocumentDetection();
+    if(stream) stream.getTracks().forEach(t=>t.stop());
+    clearReloadTimer();
+    reloadTimer = setTimeout(()=>{ window.location.reload(); }, 1800);
+  } catch(e) {
+    showError("Erro no envio: "+e.message);
+    btn.innerHTML = '📸 Capturar Foto'; btn.disabled = true;
+    startDocumentDetection();
+  } finally {
+    submitting = false;
+    hideLoading();
+  }
+}
+</script>
+</body>
+</html>

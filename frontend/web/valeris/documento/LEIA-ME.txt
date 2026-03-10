@@ -1,0 +1,16 @@
+
+VALERIS KYC COMPONENT - DOCUMENTO
+==========================================
+
+Para usar este componente:
+1. Abra o arquivo documento.html
+2. Procure pela chamada ValerisSDK.init no final do arquivo
+3. Insira seu TOKEN e a URL da sua API
+
+Configuração de exemplo:
+ValerisSDK.init({
+    apiUrl: "https://sua-api.com/api",
+    token: "SEU_TOKEN_AQUI"
+});
+
+O componente já vem configurado para funcionar de forma independente.

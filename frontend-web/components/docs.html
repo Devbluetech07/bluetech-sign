@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Documentação — Valeris API</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0A111F;--surface:#0d1a2d;--border:rgba(0,196,204,0.15);--cyan:#00C4CC;--green:#00FF88;--text:#FFFFFF;--muted:#808FA3;--card:#111d30}
+html,body{width:100%;overflow-x:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.layout{display:grid;grid-template-columns:200px minmax(0,1fr);gap:0;min-height:100vh;width:100%}
+/* Sidebar nav */
+.sidebar{background:#080e1a;border-right:1px solid var(--border);padding:28px 14px;position:sticky;top:0;height:100vh;overflow-y:auto;z-index:100}
+.logo{font-size:15px;font-weight:800;color:var(--cyan);margin-bottom:32px;letter-spacing:0.5px}
+.logo span{color:var(--muted);font-weight:400}
+.nav-section{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin:20px 0 6px;padding-left:8px}
+.nav-link{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;font-size:13px;font-weight:500;color:var(--muted);text-decoration:none;transition:all .15s;margin-bottom:2px;cursor:pointer}
+.nav-link:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.nav-link.active{color:var(--cyan);background:rgba(0,196,204,.08);font-weight:600}
+.nav-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+
+/* Main content */
+.main{padding:28px 28px 40px;max-width:100%;width:100%;margin:0 auto}
+
+@media(max-width:1200px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{display:none}
+  .main{padding:24px 16px 32px}
+}
+.page-header{margin-bottom:40px}
+.page-header h1{font-size:32px;font-weight:800;letter-spacing:-0.5px;margin-bottom:8px}
+.page-header p{color:var(--muted);font-size:15px;line-height:1.6}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(0,196,204,0.12);color:var(--cyan);border:1px solid rgba(0,196,204,0.2);margin-bottom:16px}
+/* Sections */
+h2{font-size:20px;font-weight:700;margin-bottom:6px;margin-top:48px;padding-top:24px;border-top:1px solid rgba(255,255,255,.06)}
+h2:first-of-type{margin-top:0;border-top:none;padding-top:0}
+h3{font-size:15px;font-weight:600;margin:20px 0 8px;color:var(--cyan)}
+p{color:var(--muted);font-size:14px;line-height:1.75;margin-bottom:16px}
+strong{color:var(--text)}
+/* Endpoint cards */
+.endpoint{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-bottom:12px;display:flex;flex-direction:column;gap:6px}
+.endpoint-top{display:flex;align-items:center;gap:10px}
+.method{display:inline-flex;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;flex-shrink:0}
+.m-post{background:rgba(59,130,246,.15);color:#60a5fa}
+.m-get{background:rgba(0,196,204,.15);color:var(--cyan)}
+.m-delete{background:rgba(239,68,68,.15);color:#f87171}
+.m-patch{background:rgba(245,158,11,.15);color:#fbbf24}
+.ep-path{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--text)}
+.ep-desc{font-size:13px;color:var(--muted)}
+/* Code blocks */
+.code-block{background:#060c18;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:16px 16px;margin:16px 0;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.8;max-width:100%}
+.code-block .c{color:#475569}
+.code-block .s{color:#34d399}
+.code-block .k{color:var(--cyan)}
+.code-block .p{color:#f59e0b}
+.code-block .v{color:#a5b4fc}
+/* Alert box */
+.alert{border-radius:12px;padding:16px 20px;font-size:13px;line-height:1.6;margin:20px 0}
+.alert-tip{background:rgba(0,196,204,.08);border:1px solid rgba(0,196,204,.2);color:var(--cyan)}
+.alert-warn{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);color:#fbbf24}
+.alert-icon{font-size:16px;margin-right:6px}
+/* Service tokens table */
+.services-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:20px 0}
+.service-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.service-name{font-size:13px;font-weight:700;color:var(--cyan);margin-bottom:4px}
+.service-key{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--muted)}
+.service-folder{font-size:12px;color:var(--muted);margin-top:4px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="logo">Valeris<span> Docs</span></div>
+    <div class="nav-section">Início</div>
+    <a class="nav-link active" href="#overview"><div class="nav-dot"></div> Visão Geral</a>
+    <a class="nav-link" href="#quickstart"><div class="nav-dot"></div> Quickstart</a>
+    <div class="nav-section">Microsserviços</div>
+    <a class="nav-link" href="#assinatura"><div class="nav-dot"></div> Assinatura</a>
+    <a class="nav-link" href="#documento"><div class="nav-dot"></div> Documento</a>
+    <a class="nav-link" href="#selfie"><div class="nav-dot"></div> Selfie</a>
+    <a class="nav-link" href="#selfie-doc"><div class="nav-dot"></div> Selfie + Doc</a>
+    <div class="nav-section">API REST</div>
+    <a class="nav-link" href="#auth"><div class="nav-dot"></div> Autenticação</a>
+    <a class="nav-link" href="#captures"><div class="nav-dot"></div> Capturas</a>
+    <a class="nav-link" href="#keys"><div class="nav-dot"></div> API Keys</a>
+    <div class="nav-section">SDK</div>
+    <a class="nav-link" href="#sdk-js"><div class="nav-dot"></div> SDK JavaScript</a>
+    <a class="nav-link" href="#iframe"><div class="nav-dot"></div> Embed via iFrame</a>
+  </nav>
+
+  <!-- Main -->
+  <div class="main">
+    <div class="page-header">
+      <div class="badge">📦 Valeris API v2.1</div>
+      <h1>Documentação da Plataforma</h1>
+      <p>Referência completa para integrar os microsserviços de KYC e Assinatura Eletrônica em sua aplicação. Todos os endpoints estão documentados em português.</p>
+    </div>
+
+    <!-- Overview -->
+    <h2 id="overview">Visão Geral</h2>
+    <p>A Valeris disponibiliza <strong>4 microsserviços plug-and-play</strong> de captura de identidade. Cada microsserviço pode ser incorporado de forma independente em qualquer aplicação mediante um <strong>token de acesso</strong>.</p>
+
+    <div class="services-grid">
+      <div class="service-card" id="assinatura"><div class="service-name">✏️ Assinatura Digital</div><div class="service-key">service_type: "assinatura"</div><div class="service-folder">📁 MinIO: assinatura/</div></div>
+      <div class="service-card" id="documento"><div class="service-name">📄 Documento</div><div class="service-key">service_type: "documento"</div><div class="service-folder">📁 MinIO: documento/</div></div>
+      <div class="service-card" id="selfie"><div class="service-name">🤳 Selfie Facial</div><div class="service-key">service_type: "selfie"</div><div class="service-folder">📁 MinIO: selfie/</div></div>
+      <div class="service-card" id="selfie-doc"><div class="service-name">🪪 Selfie + Documento</div><div class="service-key">service_type: "selfie-documento"</div><div class="service-folder">📁 MinIO: selfie-documento/</div></div>
+    </div>
+
+    <!-- Quickstart -->
+    <h2 id="quickstart">Quickstart — Integração em 3 passos</h2>
+
+    <h3>Passo 1 — Registre-se e obtenha um token</h3>
+    <div class="code-block">
+<span class="c"># 1. Registrar usuário</span>
+<span class="k">curl</span> -X POST <span class="s">http://API_HOST/api/auth/register</span> \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"email":"dev@suaempresa.com","password":"SenhaSegura123","nome_completo":"Dev"}'</span>
+
+<span class="c"># 2. Fazer login e copiar o token retornado</span>
+<span class="k">curl</span> -X POST <span class="s">http://API_HOST/api/auth/login</span> \
+  -d <span class="s">'{"email":"dev@suaempresa.com","password":"SenhaSegura123"}'</span>
+    </div>
+
+    <h3>Passo 2 — Incorpore o microsserviço via iFrame</h3>
+    <div class="code-block">
+<span class="c">&lt;!-- Coloque este código onde quiser o componente na sua página --&gt;</span>
+<span class="k">&lt;iframe</span>
+  <span class="p">src</span>=<span class="s">"http://API_HOST/?token=SEU_TOKEN_JWT&service=assinatura"</span>
+  <span class="p">width</span>=<span class="s">"700"</span>
+  <span class="p">height</span>=<span class="s">"600"</span>
+  <span class="p">style</span>=<span class="s">"border:none;border-radius:16px"</span>
+  <span class="p">allow</span>=<span class="s">"camera;microphone"</span>
+<span class="k">&gt;&lt;/iframe&gt;</span>
+    </div>
+
+    <div class="alert alert-tip">
+      <span class="alert-icon">💡</span> Troque <code>service=assinatura</code> por <code>service=documento</code>, <code>service=selfie</code> ou <code>service=selfie-documento</code> para usar outro microsserviço.
+    </div>
+
+    <h3>Passo 3 — Use o SDK JavaScript diretamente</h3>
+    <div class="code-block">
+<span class="c">&lt;!-- Importe o SDK --&gt;</span>
+<span class="k">&lt;script</span> <span class="p">src</span>=<span class="s">"http://API_HOST/components/valeris-sdk.js"</span><span class="k">&gt;&lt;/script&gt;</span>
+
+<span class="k">&lt;script&gt;</span>
+<span class="c">// Inicializar com seu token</span>
+<span class="v">ValerisSDK</span>.init({
+  apiUrl: <span class="s">"http://API_HOST/api"</span>,
+  token: <span class="s">"SEU_TOKEN_JWT"</span>
+});
+
+<span class="c">// Enviar uma captura manualmente</span>
+<span class="k">const</span> geo  = <span class="k">await</span> ValerisSDK.getGeolocation();
+<span class="k">const</span> dev  = <span class="k">await</span> ValerisSDK.getDeviceInfo();
+<span class="k">const</span> meta = { ...geo, ...dev, serviceType: <span class="s">"Assinatura Digital"</span> };
+<span class="k">const</span> img  = <span class="k">await</span> ValerisSDK.generateComposite(
+  [{ label: <span class="s">"Assinatura"</span>, dataUrl: minhaImagemBase64 }], meta
+);
+<span class="k">const</span> res  = <span class="k">await</span> ValerisSDK.submitCapture(<span class="s">"assinatura"</span>, img, meta);
+console.log(<span class="s">"Salvo no MinIO:"</span>, res.image_data);
+<span class="k">&lt;/script&gt;</span>
+    </div>
+
+    <!-- Auth -->
+    <h2 id="auth">Autenticação</h2>
+    <p>A API usa <strong>JWT Bearer Tokens</strong>. Inclua o header <code>Authorization: Bearer &lt;token&gt;</code> em todas as requisições autenticadas.</p>
+
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-post">POST</span><span class="ep-path">/api/auth/register</span></div><div class="ep-desc">Registra um novo usuário na plataforma</div></div>
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-post">POST</span><span class="ep-path">/api/auth/login</span></div><div class="ep-desc">Autentica e retorna o JWT token</div></div>
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-get">GET</span><span class="ep-path">/api/auth/me</span></div><div class="ep-desc">Retorna dados do usuário autenticado (requer token)</div></div>
+
+    <!-- Captures -->
+    <h2 id="captures">Capturas</h2>
+    <p>Endpoint unificado para todos os microsserviços. O campo <strong>service_type</strong> determina em qual pasta do MinIO a imagem será salva.</p>
+            <p>O SDK do Valeris automatiza a coleta de metadados, validação de imagem (nitidez, luz, cor) e geração de composições para segurança máxima.</p>
+            <div class="code-block">
+                <div class="code-header"><span>HTML / JS</span><button class="copy-btn">Copiar</button></div>
+                <pre><code>&lt;script src="valeris-sdk.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  // Inicialização e captura automática
+  const result = await ValerisSDK.validation.face(imgData);
+  if(result.isValid) {
+      console.log("Confiança:", result.confidence); // 0-100
+      // Envio com metadados automáticos
+  }
+&lt;/script&gt;</code></pre>
+            </div>
+            
+            <h3 style="margin-top:24px;margin-bottom:12px">Parâmetros de Validação</h3>
+            <table class="endpoint-table">
+                <thead><tr><th>Campo</th><th>Tipo</th><th>Descrição</th></tr></thead>
+                <tbody>
+                    <tr><td><code>confidence</code></td><td>Float</td><td>Pontuação de 0 a 100 baseada em nitidez, enquadramento e biometria.</td></tr>
+                    <tr><td><code>detectedType</code></td><td>String</td><td>Auto-identificação: CNH, RG ou Passaporte (Baseado em Aspect Ratio).</td></tr>
+                    <tr><td><code>isValid</code></td><td>Bool</td><td>Confirma se a imagem atende aos requisitos mínimos de qualidade.</td></tr>
+                </tbody>
+            </table>
+
+    <div class="code-block">
+<span class="c"># Body (JSON)</span>
+{
+  <span class="s">"service_type"</span>: <span class="s">"assinatura"</span>,  <span class="c">// assinatura | documento | selfie | selfie-documento</span>
+  <span class="s">"image_data"</span>: <span class="s">"data:image/jpeg;base64,..."</span>,
+  <span class="s">"metadata"</span>: {
+    <span class="s">"ip_publico"</span>: <span class="s">"201.x.x.x"</span>,
+    <span class="s">"latitude"</span>: -23.55,
+    <span class="s">"longitude"</span>: -46.63,
+    <span class="s">"endereco"</span>: <span class="s">"Rua Exemplo, 123 - SP"</span>,
+    <span class="s">"data_hora"</span>: <span class="s">"2026-03-09T08:30:00.000Z"</span>,
+    <span class="s">"data_hora_local"</span>: <span class="s">"09/03/2026, 05:30:00"</span>,
+    <span class="s">"fuso_horario"</span>: <span class="s">"America/Sao_Paulo"</span>,
+    <span class="s">"navegador"</span>: <span class="s">"Chrome"</span>,
+    <span class="s">"sistema_operacional"</span>: <span class="s">"Windows"</span>,
+    <span class="s">"resolucao_tela"</span>: <span class="s">"1920x1080"</span>
+  }
+}
+    </div>
+
+    <div class="code-block">
+<span class="c"># Resposta de sucesso 201</span>
+{
+  <span class="s">"id"</span>: <span class="v">42</span>,
+  <span class="s">"service_type"</span>: <span class="s">"assinatura"</span>,
+  <span class="s">"status"</span>: <span class="s">"completed"</span>,
+  <span class="s">"image_data"</span>: <span class="s">"assinatura/1741517107_abc123.png"</span>  <span class="c">// Caminho no MinIO</span>
+}
+    </div>
+
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-get">GET</span><span class="ep-path">/api/captures/</span></div><div class="ep-desc">Lista capturas do usuário autenticado</div></div>
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-get">GET</span><span class="ep-path">/api/captures/:id</span></div><div class="ep-desc">Retorna captura específica por ID</div></div>
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-post">POST</span><span class="ep-path">/api/captures/search</span></div><div class="ep-desc">Busca semântica por similaridade vetorial (pgvector)</div></div>
+
+    <!-- API Keys -->
+    <h2 id="keys">Chaves de API</h2>
+    <div class="alert alert-warn"><span class="alert-icon">⚠️</span> Chaves de API são para integrações server-to-server. Nunca exponha a chave no frontend de produção.</div>
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-get">GET</span><span class="ep-path">/api/keys/</span></div><div class="ep-desc">Lista suas chaves de API</div></div>
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-post">POST</span><span class="ep-path">/api/keys/</span></div><div class="ep-desc">Cria nova chave de API</div></div>
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-patch">PATCH</span><span class="ep-path">/api/keys/:id</span></div><div class="ep-desc">Atualiza uma chave existente</div></div>
+    <div class="endpoint"><div class="endpoint-top"><span class="method m-delete">DELETE</span><span class="ep-path">/api/keys/:id</span></div><div class="ep-desc">Revoga uma chave de API</div></div>
+
+    <!-- SDK JS -->
+    <h2 id="sdk-js">SDK JavaScript — Referência</h2>
+    <p>O <code>valeris-sdk.js</code> está disponível em <code>/components/valeris-sdk.js</code> e expõe o objeto global <code>ValerisSDK</code>.</p>
+
+    <h3>ValerisSDK.init(options)</h3>
+    <div class="code-block">
+ValerisSDK.init({
+  apiUrl: <span class="s">"http://sua-api.com/api"</span>,  <span class="c">// URL base da API</span>
+  token: <span class="s">"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."</span>  <span class="c">// JWT opcional</span>
+});
+    </div>
+
+    <h3>ValerisSDK.getDeviceInfo() → Promise</h3>
+    <p>Coleta metadados do dispositivo: IP público, navegador, SO, resolução, fuso horário, data/hora.</p>
+
+    <h3>ValerisSDK.getGeolocation() → Promise</h3>
+    <p>Coleta coordenadas GPS e resolve o endereço via Nominatim (OpenStreetMap).</p>
+
+    <h3>ValerisSDK.generateComposite(images, metadata) → Promise&lt;dataUrl&gt;</h3>
+    <p>Gera uma imagem composta com as capturas e um bloco de metadados visível na imagem salva no MinIO.</p>
+
+    <h3>ValerisSDK.submitCapture(serviceType, compositeDataUrl, metadata) → Promise</h3>
+    <p>Envia a imagem para a API. A API salva no MinIO na pasta correspondente ao <code>serviceType</code>.</p>
+
+    <!-- iFrame -->
+    <h2 id="iframe">Embed via iFrame</h2>
+    <p>A forma mais simples de integrar é via iFrame. Toda a interface e lógica ficam isoladas dentro do iFrame.</p>
+
+    <div class="code-block">
+<span class="c">&lt;!-- Integração completa: só coloque o token e o service --&gt;</span>
+<span class="k">&lt;div</span> <span class="p">style</span>=<span class="s">"border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,0.4)"</span><span class="k">&gt;</span>
+  <span class="k">&lt;iframe</span>
+    <span class="p">src</span>=<span class="s">"http://API_HOST/?service=assinatura&token=SEU_TOKEN"</span>
+    <span class="p">width</span>=<span class="s">"760"</span> <span class="p">height</span>=<span class="s">"640"</span>
+    <span class="p">style</span>=<span class="s">"border:none"</span>
+    <span class="p">allow</span>=<span class="s">"camera;microphone;geolocation"</span>
+  <span class="k">/&gt;</span>
+<span class="k">&lt;/div&gt;</span>
+    </div>
+
+    <!-- Guia de Integração -->
+    <h2 id="integration">Guia de Integração — Flutter & Go</h2>
+    <p>Abaixo, exemplos de como integrar o Valeris em projetos reais utilizando as tecnologias mais comuns do mercado.</p>
+
+    <h3>1. Flutter (Injeção de WebView)</h3>
+    <p>Para o Flutter, a melhor forma é utilizar o pacote <code>webview_flutter</code>. Você injeta o token via URL e escuta o evento de sucesso através de <code>postMessage</code>.</p>
+    <div class="code-block">
+<span class="c">// No seu widget Flutter</span>
+<span class="k">WebViewController</span> controller = WebViewController()
+  ..setJavaScriptMode(JavaScriptMode.unrestricted)
+  ..addJavaScriptChannel(<span class="s">'ValerisChannel'</span>, onMessageReceived: (message) {
+    <span class="k">if</span> (message.message.contains(<span class="s">'VALERIS_CAPTURE_SUCCESS'</span>)) {
+      <span class="v">print</span>(<span class="s">"Captura realizada com sucesso!"</span>);
+      <span class="c">// Fechar WebView e prosseguir</span>
+    }
+  })
+  ..loadRequest(Uri.parse(<span class="s">"http://VALERIS_HOST/?service=selfie&token=$userJwtToken"</span>));
+    </div>
+
+    <h3>2. Go (Validação no Backend)</h3>
+    <p>Se você estiver usando Go no backend, pode validar a autenticidade das capturas consultando a API do Valeris ou verificando a assinatura do JWT.</p>
+    <div class="code-block">
+<span class="k">func</span> <span class="v">checkCapture</span>(captureID <span class="k">string</span>, token <span class="k">string</span>) {
+    client := &http.Client{}
+    req, _ := http.NewRequest(<span class="s">"GET"</span>, <span class="s">"http://VALERIS_API/api/captures/"</span>+captureID, <span class="v">nil</span>)
+    req.Header.Set(<span class="s">"Authorization"</span>, <span class="s">"Bearer "</span>+token)
+    
+    resp, err := client.Do(req)
+    <span class="k">if</span> err == <span class="v">nil</span> && resp.StatusCode == 200 {
+        <span class="v">fmt.Println</span>(<span class="s">"Captura validada com sucesso"</span>)
+    }
+}
+    </div>
+
+    <div class="alert alert-tip">
+      <span class="alert-icon">🚀</span>
+      <strong>Dica de Produção:</strong> Em produçao, use sempre HTTPS para que a câmera funcione corretamente no Chrome e Safari Mobile.
+    </div>
+
+    <div class="alert alert-warn">
+      <span class="alert-icon">✅</span>
+      A imagem resultante é <strong>automaticamente salva no MinIO</strong> com todos os metadados embutidos (IP, localização, data/hora, dispositivo). Nenhuma configuração adicional é necessária no lado do consumidor.
+    </div>
+  </div>
+</div>
+<script>
+// Handle sidebar active state and smooth scroll
+document.querySelectorAll('.nav-link').forEach(link => {
+    link.addEventListener('click', function(e) {
+        if (this.hash !== "") {
+            // e.preventDefault(); // Let the hash change naturally
+            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+            
+            const target = document.querySelector(this.hash);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+    });
+});
+
+// Update active link on scroll
+window.addEventListener('scroll', () => {
+    let current = "";
+    document.querySelectorAll('h2, .service-card').forEach(section => {
+        const sectionTop = section.offsetTop;
+        if (pageYOffset >= sectionTop - 100) {
+            current = section.getAttribute('id');
+        }
+    });
+
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href').includes(current) && current !== "") {
+            link.classList.add('active');
+        }
+    });
+});
+</script>
+</body>
+</html>

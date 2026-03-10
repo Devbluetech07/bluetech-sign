@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central de Microserviços</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#020817;--card:#0d1a2d;--border:rgba(148,163,184,.1);--text:#e2e8f0;--muted:#64748b;--primary:#10b981}
+body{font-family:'Inter',sans-serif;background:transparent;color:var(--text);padding:40px;min-height:100vh}
+
+.header{margin-bottom:48px}
+.header h1{font-size:32px;font-weight:800;letter-spacing:-1px;margin-bottom:8px}
+.header p{color:var(--muted);font-size:16px;max-width:600px;line-height:1.6}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:24px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:32px;transition:all .3s cubic-bezier(0.4, 0, 0.2, 1);cursor:pointer;position:relative;overflow:hidden;display:flex;flex-direction:column}
+.card:hover{transform:translateY(-8px);border-color:rgba(148,163,184,0.3);box-shadow:0 20px 40px -15px rgba(0,0,0,0.5)}
+
+.card-icon{width:56px;height:56px;border-radius:16px;display:flex;align-items:center;justify-content:center;margin-bottom:24px;font-size:24px}
+/* Cores do Lovable */
+.icon-assinatura{background:rgba(236,72,153,.1);color:#ec4899}
+.icon-documento{background:rgba(239,68,68,.1);color:#ef4444}
+.icon-selfie{background:rgba(244,114,182,.1);color:#f472b6}
+
+.card h3{font-size:20px;font-weight:700;margin-bottom:12px}
+.card p{font-size:14px;color:var(--muted);line-height:1.5}
+
+.card-badge{position:absolute;top:20px;right:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:4px 8px;background:rgba(255,255,255,0.05);border-radius:6px;color:rgba(255,255,255,0.4)}
+</style>
+</head>
+<body>
+    <div class="header">
+        <h1>Central de Microserviços API</h1>
+        <p>Bem-vindo ao Valeris. Gerencie e teste seus fluxos de verificação de identidade em tempo real através da nossa infraestrutura escalável.</p>
+    </div>
+
+    <div class="grid">
+        <div class="card" onclick="window.parent.nav('assinatura', window.parent.document.querySelectorAll('.nav-item')[1])">
+            <div class="card-badge">Digital</div>
+            <div class="card-icon icon-assinatura">✍️</div>
+            <h3>Assinatura</h3>
+            <p>Captura de assinatura manuscrita ou digitada com prova de dispositivo e liveness.</p>
+        </div>
+
+        <div class="card" onclick="window.parent.nav('documento', window.parent.document.querySelectorAll('.nav-item')[2])">
+            <div class="card-badge">KYC</div>
+            <div class="card-icon icon-documento">🪪</div>
+            <h3>Documento</h3>
+            <p>Extração e validação automática de RG (Frente/Verso), CNH e Passaportes.</p>
+        </div>
+
+        <div class="card" onclick="window.parent.nav('selfie', window.parent.document.querySelectorAll('.nav-item')[3])">
+            <div class="card-badge">Biometria</div>
+            <div class="card-icon icon-selfie">🤳</div>
+            <h3>Selfie</h3>
+            <p>Verificação facial com análise biométrica e comparação contra documentos.</p>
+        </div>
+    </div>
+</body>
+</html>

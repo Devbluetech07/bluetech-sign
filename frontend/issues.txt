@@ -1,0 +1,77 @@
+
+warning - The value of the local variable 'token' isn't used - lib\presentation\admin\admin_companies.dart:28:13 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\admin\admin_companies.dart:93:96 - deprecated_member_use
+  error - Expected to find ',' - lib\presentation\admin\admin_companies.dart:97:54 - expected_token
+  error - Too many positional arguments: 1 expected, but 5 found - lib\presentation\admin\admin_companies.dart:97:54 - extra_positional_arguments_could_be_named
+  error - Undefined name 'cnpj' - lib\presentation\admin\admin_companies.dart:97:54 - undefined_identifier
+  error - Expected to find ',' - lib\presentation\admin\admin_companies.dart:97:58 - expected_token
+  error - Expected to find ',' - lib\presentation\admin\admin_companies.dart:97:77 - expected_token
+  error - Undefined name 'users_count' - lib\presentation\admin\admin_companies.dart:97:77 - undefined_identifier
+  error - Expected to find ',' - lib\presentation\admin\admin_companies.dart:97:88 - expected_token
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\admin\admin_companies.dart:101:47 - deprecated_member_use
+warning - The value of the local variable 'token' isn't used - lib\presentation\admin\admin_companies.dart:133:15 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\admin\admin_dashboard.dart:66:30 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\admin\admin_dashboard.dart:110:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\admin\admin_dashboard.dart:110:138 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\presentation\auth\login_page.dart:52:33 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\auth\login_page.dart:114:90 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\auth\login_page.dart:115:87 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\auth\login_page.dart:141:111 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\auth\login_page.dart:162:112 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\auth\login_page.dart:195:92 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\auth\login_page.dart:195:150 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\auth\login_page.dart:278:72 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\auth\login_page.dart:279:91 - deprecated_member_use
+  error - Expected to find ',' - lib\presentation\dashboard\dashboard_page.dart:147:55 - expected_token
+  error - Too many positional arguments: 1 expected, but 3 found - lib\presentation\dashboard\dashboard_page.dart:147:55 - extra_positional_arguments_could_be_named
+  error - Undefined name 'ID' - lib\presentation\dashboard\dashboard_page.dart:147:55 - undefined_identifier
+  error - Expected to find ',' - lib\presentation\dashboard\dashboard_page.dart:147:57 - expected_token
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\dashboard\dashboard_page.dart:151:79 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\dashboard\dashboard_page.dart:151:112 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\dashboard\dashboard_page.dart:174:43 - deprecated_member_use
+warning - The value of the local variable 'token' isn't used - lib\presentation\document_flow\document_flow_page.dart:51:13 - unused_local_variable
+warning - The value of the local variable 'docId' isn't used - lib\presentation\document_flow\document_flow_page.dart:70:13 - unused_local_variable
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\presentation\document_flow\document_flow_page.dart:184:23 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\presentation\document_flow\document_flow_page.dart:185:23 - deprecated_member_use
+   info - 'groupValue' is deprecated and shouldn't be used. Use a RadioGroup ancestor to manage group value instead. This feature was deprecated after v3.32.0-0.0.pre - lib\presentation\document_flow\document_flow_page.dart:194:23 - deprecated_member_use
+   info - 'onChanged' is deprecated and shouldn't be used. Use RadioGroup to handle value change instead. This feature was deprecated after v3.32.0-0.0.pre - lib\presentation\document_flow\document_flow_page.dart:195:23 - deprecated_member_use
+warning - The value of the local variable 'token' isn't used - lib\presentation\documents\documents_page.dart:43:11 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\documents\documents_page.dart:93:27 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\documents\documents_page.dart:98:28 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\documents\documents_page.dart:103:25 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\documents\documents_page.dart:108:26 - deprecated_member_use
+  error - The class 'EdgeInsets' doesn't have a constant constructor 'bottom' - lib\presentation\documents\documents_page.dart:231:42 - const_with_undefined_constructor
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\documents\documents_page.dart:233:64 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\documents\documents_page.dart:235:83 - deprecated_member_use
+  error - Expected to find ',' - lib\presentation\documents\documents_page.dart:302:53 - expected_token
+  error - Too many positional arguments: 1 expected, but 3 found - lib\presentation\documents\documents_page.dart:302:53 - extra_positional_arguments_could_be_named
+  error - Undefined name 'ID' - lib\presentation\documents\documents_page.dart:302:53 - undefined_identifier
+  error - Expected to find ',' - lib\presentation\documents\documents_page.dart:302:55 - expected_token
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\documents\documents_page.dart:334:95 - deprecated_member_use
+   info - Statements in an if should be enclosed in a block - lib\presentation\documents\documents_page.dart:342:64 - curly_braces_in_flow_control_structures
+   info - Statements in an if should be enclosed in a block - lib\presentation\documents\documents_page.dart:343:52 - curly_braces_in_flow_control_structures
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\layouts\admin_layout.dart:150:69 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\layouts\main_layout.dart:222:67 - deprecated_member_use
+   info - 'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead - lib\presentation\microservices\iframe_embed.dart:2:1 - deprecated_member_use
+   info - Don't use web-only libraries outside Flutter web plugins - lib\presentation\microservices\iframe_embed.dart:2:1 - avoid_web_libraries_in_flutter
+  error - The name 'platformViewRegistry' is being referenced through the prefix 'ui', but it isn't defined in any of the libraries imported using that prefix - lib\presentation\microservices\iframe_embed.dart:22:8 - undefined_prefixed_name
+warning - Unused import: 'package:lucide_icons/lucide_icons.dart' - lib\presentation\settings\settings_page.dart:2:8 - unused_import
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\settings\settings_page.dart:47:64 - deprecated_member_use
+   info - 'activeColor' is deprecated and shouldn't be used. Use activeThumbColor instead. This feature was deprecated after v3.31.0-2.0.pre - lib\presentation\settings\settings_page.dart:246:50 - deprecated_member_use
+warning - The value of the local variable 'err' isn't used - lib\presentation\signing\public_signing_page.dart:79:19 - unused_local_variable
+  error - The named parameter 'maxWidth' isn't defined - lib\presentation\signing\public_signing_page.dart:129:13 - undefined_named_parameter
+  error - Expected to find ',' - lib\presentation\signing\public_signing_page.dart:138:43 - expected_token
+  error - Too many positional arguments: 1 expected, but 3 found - lib\presentation\signing\public_signing_page.dart:138:43 - extra_positional_arguments_could_be_named
+  error - Undefined name 'name' - lib\presentation\signing\public_signing_page.dart:138:43 - undefined_identifier
+  error - Expected to find ',' - lib\presentation\signing\public_signing_page.dart:138:47 - expected_token
+  error - Expected to find ',' - lib\presentation\signing\public_signing_page.dart:140:61 - expected_token
+  error - Too many positional arguments: 1 expected, but 3 found - lib\presentation\signing\public_signing_page.dart:140:61 - extra_positional_arguments_could_be_named
+  error - Undefined name 'name' - lib\presentation\signing\public_signing_page.dart:140:61 - undefined_identifier
+  error - Expected to find ',' - lib\presentation\signing\public_signing_page.dart:140:65 - expected_token
+  error - Expected to find ',' - lib\presentation\signing\public_signing_page.dart:156:49 - expected_token
+  error - Too many positional arguments: 1 expected, but 3 found - lib\presentation\signing\public_signing_page.dart:156:49 - extra_positional_arguments_could_be_named
+  error - Undefined name 'pages' - lib\presentation\signing\public_signing_page.dart:156:49 - undefined_identifier
+  error - Expected to find ',' - lib\presentation\signing\public_signing_page.dart:156:54 - expected_token
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\team\team_page.dart:175:78 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\presentation\team\team_page.dart:200:81 - deprecated_member_use
+

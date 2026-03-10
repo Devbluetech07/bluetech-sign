@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # POSTGRESQL (com pgvector)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: singproof-postgres
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: rootpassword
+      POSTGRES_DB: singproof
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d singproof"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # MINIO STORAGE (Compatível com S3)
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: singproof-minio-v2
+    command: server /data --console-address ":29101" --address ":29100"
+    environment:
+      MINIO_ROOT_USER: local-minio-key
+      MINIO_ROOT_PASSWORD: local-minio-secret
+    ports:
+      - "29102:29100"  # S3 API
+      - "29103:29101"  # Console
+      - "9112:9101"    # Métricas
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:29100/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # BACKEND GO (API REST principal)
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: singproof-backend
+    ports:
+      - "4101:3001"
+    environment:
+      - DB_URL=postgres://root:rootpassword@postgres:5432/singproof?sslmode=disable
+      - MINIO_ENDPOINT=minio:29100
+      - MINIO_ACCESS_KEY=local-minio-key
+      - MINIO_SECRET_KEY=local-minio-secret
+      - MINIO_USE_SSL=false
+      - MINIO_BUCKET=bluetech-sign
+      - MINIO_PROJECT_FOLDER=singproof_v1
+      - API_PUBLIC_URL=http://localhost:4101
+      - FRONTEND_URL=http://localhost:4100
+      - EMAIL_FROM=SignProof <onboarding@resend.dev>
+      - RESEND_API_KEY=re_GSUAsU4K_LdnuBJNoRVsWGS6csbdNkbDs
+      - JWT_SECRET=valeris_super_secret_key_2026
+      - BLUETECH_GATEWAY_URL=http://host.docker.internal:3000
+      - BLUETECH_ASSINATURA_URL=http://host.docker.internal:3000/api/v1/assinatura
+      - BLUETECH_DOCUMENTO_URL=http://host.docker.internal:3000/api/v1/documento
+      - BLUETECH_SELFIE_DOC_URL=http://host.docker.internal:3000/api/v1/selfie-documento
+      - VALERIS_API_TOKEN=vl_312035606bc79810dce7fc61715b142b6b57a42f66702224d7b080a40232f788
+      - PORT=3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # NGINX FRONTEND + PROXY
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: singproof-nginx
+    ports:
+      - "4100:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/build/web:/usr/share/nginx/html:ro  # Caminho da build do flutter web
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  minio_data:

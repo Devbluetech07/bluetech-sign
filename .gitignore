@@ -1,0 +1,66 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code related
+.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+frontend/build/
+frontend/.dart_tool/
+frontend/.flutter-plugins*
+frontend/.packages
+frontend/pubspec.lock
+
+# Go related
+backend/vendor/
+backend/*.exe
+backend/*.test
+backend/bin/
+
+# Project Specific
+*.log
+*.tmp
+*.bak
+api_logs.txt
+backend-full.log
+backend-logs.txt
+backend.log
+backend2.log
+backend_logs.txt
+build_err.txt
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+backups/
+
+# Flutter other dirs
+frontend_flutter/.dart_tool/
+frontend_flutter/build/
+frontend_flutter/.flutter-plugins
+frontend_flutter/.flutter-plugins-dependencies
+frontend_flutter/.packages
+frontend_flutter/pubspec.lock

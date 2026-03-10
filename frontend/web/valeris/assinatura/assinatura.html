@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Captura de Assinatura</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Dancing+Script:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0A111F;--surface:#0d1a2d;--border:rgba(0,196,204,0.2);
+  --cyan:#00C4CC;--cyan10:rgba(0,196,204,0.1);--cyan20:rgba(0,196,204,0.2);
+  --text:#FFFFFF;--muted:#808FA3;--card:#111d30
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);padding:clamp(16px, 5vw, 40px);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+h1{font-size:clamp(20px, 6vw, 26px);font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;text-align:center}
+.subtitle{color:var(--muted);font-size:clamp(12px, 3.5vw, 14px);margin-bottom:28px;text-align:center}
+
+/* Stepper */
+.stepper{display:flex;align-items:center;margin-bottom:32px;gap:0;width:100%;max-width:400px;justify-content:center}
+.step{display:flex;align-items:center;gap:8px}
+.step-circle{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;transition:all .4s;flex-shrink:0}
+.step-circle.pending{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid rgba(255,255,255,.1)}
+.step-circle.active{background:var(--cyan);color:#000;box-shadow:0 0 16px var(--cyan)}
+.step-circle.done{background:var(--cyan);color:#000}
+.step-label{font-size:12px;font-weight:600;white-space:nowrap}
+.step-label.active-label{color:var(--cyan)}
+.step-label.pending-label{color:var(--muted)}
+.step-line{flex:1;height:2px;background:rgba(255,255,255,.08);margin:0 8px;transition:background .4s;max-width:48px}
+.step-line.done{background:var(--cyan)}
+
+/* Card container */
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;max-width:680px;width:100%}
+.tabs{display:flex;border-bottom:1px solid var(--border)}
+.tab{flex:1;padding:18px;text-align:center;cursor:pointer;font-weight:600;font-size:14px;color:var(--muted);border:none;background:none;font-family:inherit;border-bottom:2px solid transparent;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.tab:hover:not(.active){color:var(--text)}
+.tab svg{width:16px;height:16px}
+
+.draw-area,.type-area{padding:clamp(16px, 4vw, 28px)}
+.hint{text-align:center;color:var(--muted);font-size:13px;margin-bottom:20px}
+
+/* Canvas wrapper */
+.canvas-wrap{
+  border:2px dashed var(--cyan);border-radius:16px;height:220px;
+  background:rgba(0,196,204,.04);position:relative;overflow:hidden;margin-bottom:24px;
+  box-shadow:0 0 20px rgba(0,196,204,0.12),inset 0 0 20px rgba(0,196,204,0.04);
+  cursor:crosshair;
+}
+.canvas-wrap canvas{position:absolute;inset:0;width:100%;height:100%}
+/* Corner decorations */
+.canvas-wrap::before,.canvas-wrap::after{content:'';position:absolute;width:16px;height:16px;border-color:var(--cyan);border-style:solid;opacity:0.6}
+.canvas-wrap::before{top:8px;left:8px;border-width:2px 0 0 2px;border-radius:3px 0 0 0}
+.canvas-wrap::after{bottom:8px;right:8px;border-width:0 2px 2px 0;border-radius:0 0 3px 0}
+
+.actions{display:flex;gap:12px}
+
+/* Buttons */
+.btn{padding:14px 20px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text);font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;flex:1}
+.btn:hover{background:rgba(255,255,255,.05)}
+.btn-primary{border:none;background:var(--cyan);color:#000;animation:pulse-btn 2.5s ease-in-out infinite;box-shadow:0 4px 12px rgba(0,196,204,0.3)}
+.btn-primary:hover{opacity:0.9;animation:none;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;animation:none;cursor:not-allowed}
+@keyframes pulse-btn{0%,100%{box-shadow:0 0 0 0 rgba(0,196,204,0)}50%{box-shadow:0 0 0 8px rgba(0,196,204,0)}}
+.spinner{width:16px;height:16px;border:2px solid rgba(0,0,0,0.2);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Type input */
+.type-area{display:none}
+.type-input{width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:12px;padding:14px 18px;font-size:16px;color:var(--text);outline:none;margin-bottom:20px;transition:all .2s;font-family:inherit}
+.type-input:focus{border-color:var(--cyan);background:rgba(0,196,204,0.05)}
+.type-preview{
+  width:100%;height:160px;background:rgba(0,196,204,.03);border:2px dashed var(--border);border-radius:16px;
+  display:flex;align-items:center;justify-content:center;margin-bottom:24px;
+  font-family:'Dancing Script', cursive;font-size:clamp(32px, 8vw, 56px);color:var(--cyan);
+  text-shadow:0 0 10px rgba(0,196,204,0.3);position:relative;overflow:hidden;
+}
+.type-preview::after{content:'Assinatura Digital';position:absolute;bottom:8px;right:12px;font-family:'Inter';font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+
+/* Success screen */
+.success-screen{display:none;padding:48px 32px;text-align:center}
+.trophy-wrap{position:relative;margin:0 auto 28px;width:100px;height:100px}
+.trophy-svg{width:100px;height:100px;animation:pop-in .6s cubic-bezier(0.175,0.885,0.32,1.275) both}
+@keyframes pop-in{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
+.confetti-container{position:absolute;inset:-40px;pointer-events:none;overflow:visible}
+.confetti{position:absolute;width:7px;height:7px;border-radius:2px;animation:fall 2.5s ease-in-out infinite}
+@keyframes fall{0%{transform:translateY(-20px) rotate(0);opacity:1}100%{transform:translateY(100px) rotate(360deg);opacity:0}}
+.success-title{font-size:22px;font-weight:800;margin-bottom:8px}
+.success-sub{color:var(--muted);font-size:14px;margin-bottom:32px}
+
+/* Error box */
+.error-box{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px 16px;color:#f87171;font-size:13px;margin-bottom:16px;display:none}
+.loading-overlay{position:fixed;inset:0;background:rgba(10,17,31,.9);display:none;align-items:center;justify-content:center;z-index:9999}
+.loading-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;text-align:center;min-width:220px}
+.loading-card .spinner{margin:0 auto 12px;display:block}
+.loading-title{font-weight:700;color:var(--cyan);margin-bottom:6px}
+.loading-sub{font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- Stepper -->
+<div class="stepper">
+  <div class="step"><div class="step-circle active" id="s1">✏️</div><span class="step-label active-label" id="sl1">Assinatura</span></div>
+  <div class="step-line" id="l1"></div>
+  <div class="step"><div class="step-circle pending" id="s2">✅</div><span class="step-label pending-label" id="sl2">Confirmação</span></div>
+</div>
+
+<h1>Captura de Assinatura</h1>
+<div class="subtitle">Assine com o dedo ou mouse (v2.6)</div>
+
+<!-- Main card -->
+<div class="card" id="mainCard">
+  <div class="tabs">
+    <button class="tab active" id="tabDraw" onclick="switchTab('draw')">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+      Desenhar
+    </button>
+    <button class="tab" id="tabType" onclick="switchTab('type')">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      Digitar
+    </button>
+  </div>
+
+  <!-- Draw panel -->
+  <div class="draw-area" id="drawArea">
+    <p class="hint">Use o aparelho touch ou o mouse para desenhar</p>
+    <div class="canvas-wrap"><canvas id="pad"></canvas></div>
+    <div id="errorBox" class="error-box"></div>
+    <div class="actions">
+      <button class="btn" onclick="clearPad()">Limpar</button>
+      <button class="btn btn-primary" id="btnConfirmDraw" onclick="confirm()">Confirmar Assinatura</button>
+    </div>
+  </div>
+
+  <!-- Type panel -->
+  <div class="type-area" id="typeArea">
+    <p class="hint">Digite seu nome para gerar sua assinatura</p>
+    <input class="type-input" id="typeInput" placeholder="Ex: João da Silva" autocomplete="off" oninput="updatePreview(this.value)">
+    <div class="type-preview" id="typePreview">Seu nome aqui</div>
+    <div id="errorBoxType" class="error-box"></div>
+    <div class="actions">
+      <button class="btn" onclick="clearType()">Limpar</button>
+      <button class="btn btn-primary" id="btnConfirmType" onclick="confirm()">Confirmar Assinatura</button>
+    </div>
+  </div>
+</div>
+
+<!-- Success screen -->
+<div class="success-screen" id="successScreen">
+  <div class="trophy-wrap">
+    <svg class="trophy-svg" viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="48" stroke="#00C4CC" stroke-width="2" opacity="0.3"/>
+      <circle cx="50" cy="50" r="38" stroke="#00C4CC" stroke-width="1.5" opacity="0.2"/>
+      <path d="M50 25l5.9 11.9L70 38.7l-10 9.8 2.4 13.8L50 56l-12.4 6.3L40 48.5 30 38.7l14.1-1.8L50 25z" fill="#00C4CC" opacity="0.9"/>
+    </svg>
+    <div class="confetti-container" id="confettiContainer"></div>
+  </div>
+  <h2 class="success-title" style="color:var(--cyan)">Assinatura Enviada!</h2>
+  <p class="success-sub">Sua assinatura foi capturada e gravada com sucesso.</p>
+  <button class="btn btn-primary" style="max-width:220px;margin:0 auto" onclick="reset()">Nova Assinatura</button>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-card">
+    <span class="spinner"></span>
+    <div class="loading-title">Enviando assinatura</div>
+    <div class="loading-sub">Aguarde alguns segundos...</div>
+  </div>
+</div>
+
+<script src="valeris-sdk.js?v=2.6"></script>
+<script>
+const assinaturaParams = new URLSearchParams(window.location.search);
+ValerisSDK.init({
+  apiUrl: assinaturaParams.get('apiUrl') || '/api',
+  token: assinaturaParams.get('token') || 'portal-demo'
+});
+const canvas=document.getElementById('pad'), ctx=canvas.getContext('2d');
+let drawing=false;
+let isSubmitting=false;
+
+function resize(){
+  const r=Math.max(devicePixelRatio,1);
+  canvas.width=canvas.offsetWidth*r; canvas.height=canvas.offsetHeight*r;
+  ctx.scale(r,r);
+  ctx.strokeStyle='#FFFFFF';
+  ctx.lineWidth=2.5;
+  ctx.lineCap='round';
+  ctx.lineJoin='round';
+}
+window.addEventListener('resize',resize); setTimeout(resize,60);
+
+function pos(e){
+  const r=canvas.getBoundingClientRect();
+  const t=e.touches?e.touches[0]:e;
+  return{x:(t.clientX-r.left),y:(t.clientY-r.top)};
+}
+
+canvas.onmousedown=e=>{drawing=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y)};
+canvas.onmousemove=e=>{if(drawing){const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke()}};
+canvas.onmouseup=canvas.onmouseout=()=>drawing=false;
+canvas.ontouchstart=e=>{e.preventDefault();drawing=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y)};
+canvas.ontouchmove=e=>{e.preventDefault();if(drawing){const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke()}};
+canvas.ontouchend=()=>drawing=false;
+
+function clearPad(){ctx.clearRect(0,0,canvas.width,canvas.height)}
+
+function clearType(){
+  const inp=document.getElementById('typeInput');
+  inp.value='';
+  updatePreview('');
+}
+
+function updatePreview(val){
+  const prev=document.getElementById('typePreview');
+  prev.textContent = val.trim() || "Seu nome aqui";
+  prev.style.opacity = val.trim() ? "1" : "0.3";
+}
+
+function switchTab(t){
+  document.getElementById('tabDraw').classList.toggle('active',t==='draw');
+  document.getElementById('tabType').classList.toggle('active',t==='type');
+  document.getElementById('drawArea').style.display=t==='draw'?'block':'none';
+  document.getElementById('typeArea').style.display=t==='type'?'block':'none';
+  if(t==='draw')setTimeout(resize,60);
+}
+
+function showError(msg,boxId='errorBox'){
+  const b=document.getElementById(boxId);b.textContent=msg;b.style.display='block';
+  setTimeout(()=>b.style.display='none',6000);
+}
+
+function showLoading(){document.getElementById('loadingOverlay').style.display='flex';}
+function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
+
+function setSubmittingState(submitting){
+  const btnD=document.getElementById('btnConfirmDraw'),btnT=document.getElementById('btnConfirmType');
+  isSubmitting=submitting;
+  if(submitting){
+    btnD.innerHTML='<span class="spinner"></span> Enviando...';btnD.disabled=true;
+    btnT.innerHTML='<span class="spinner"></span> Enviando...';btnT.disabled=true;
+  }else{
+    btnD.textContent='Confirmar Assinatura';btnD.disabled=false;
+    btnT.textContent='Confirmar Assinatura';btnT.disabled=false;
+  }
+}
+
+function hasInkOnCanvas(){
+  const img=ctx.getImageData(0,0,canvas.width,canvas.height).data;
+  for(let i=3;i<img.length;i+=4){ if(img[i]>0) return true; }
+  return false;
+}
+
+function spawnConfetti(){
+  const c=document.getElementById('confettiContainer');c.innerHTML='';
+  const colors=['#00C4CC','#00FF88','#FFFFFF','#a5f3fc'];
+  for(let i=0;i<18;i++){
+    const el=document.createElement('div');
+    el.className='confetti';
+    el.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*20}%;
+      background:${colors[i%colors.length]};
+      animation-delay:${Math.random()*1.5}s;
+      animation-duration:${1.5+Math.random()}s;
+      width:${5+Math.random()*6}px;height:${5+Math.random()*6}px;
+      border-radius:${Math.random()>0.5?'50%':'2px'}`;
+    c.appendChild(el);
+  }
+}
+
+async function confirm(){
+  if(isSubmitting) return;
+  const isDrawing=document.getElementById('tabDraw').classList.contains('active');
+  let dataUrl;
+
+  if(isDrawing){
+    if(!hasInkOnCanvas()){showError('Desenhe a assinatura antes de confirmar.');return;}
+    dataUrl=canvas.toDataURL('image/png');
+  }else{
+    const text=document.getElementById('typeInput').value.trim();
+    if(text.length<3){showError('Mínimo de 3 caracteres.','errorBoxType');return;}
+    const tc=document.createElement('canvas');tc.width=800;tc.height=300;
+    const tctx=tc.getContext('2d');
+    tctx.fillStyle='white';tctx.fillRect(0,0,tc.width,tc.height);
+    tctx.fillStyle='black';tctx.font='100px "Dancing Script"';
+    tctx.textAlign='center';tctx.textBaseline='middle';
+    tctx.fillText(text,400,150);
+    // Draw metadata bottom right
+    tctx.font='12px "Inter"'; tctx.fillStyle='#999'; tctx.fillText('VALIDADO POR VALERIS', 700, 280);
+    dataUrl=tc.toDataURL('image/png');
+  }
+
+  setSubmittingState(true);
+  showLoading();
+
+  try{
+    const geo=await ValerisSDK.getGeolocation();
+    const dev=await ValerisSDK.getDeviceInfo();
+    const meta={...geo,...dev,serviceType:'Assinatura Digital'};
+    const composite=await ValerisSDK.generateComposite([{label:'Assinatura',dataUrl}],meta);
+    meta.resultado_validacao={};
+    await ValerisSDK.submitCapture('assinatura',composite,meta);
+
+    document.getElementById('mainCard').style.display='none';
+    document.getElementById('successScreen').style.display='block';
+    spawnConfetti();
+    // mark stepper done
+    document.getElementById('s1').className='step-circle done';
+    document.getElementById('l1').className='step-line done';
+    document.getElementById('s2').className='step-circle active';
+    document.getElementById('sl2').className='step-label active-label';
+  }catch(e){
+    showError('Erro ao enviar: '+e.message);
+    setSubmittingState(false);
+  }finally{
+    hideLoading();
+  }
+}
+
+function reset(){
+  document.getElementById('mainCard').style.display='block';
+  document.getElementById('successScreen').style.display='none';
+  clearPad();document.getElementById('typeInput').value='';
+  document.getElementById('s1').className='step-circle active';
+  document.getElementById('l1').className='step-line';
+  document.getElementById('s2').className='step-circle pending';
+  document.getElementById('sl2').className='step-label pending-label';
+  setSubmittingState(false);
+  hideLoading();
+}
+</script>
+</body>
+</html>

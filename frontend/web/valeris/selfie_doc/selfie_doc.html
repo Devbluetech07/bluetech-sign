@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Selfie + Documento</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0A111F;--border:rgba(0,196,204,0.2);--cyan:#00C4CC;--green:#00FF88;--text:#FFFFFF;--muted:#808FA3;--card:#111d30}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);padding:clamp(16px, 5vw, 40px);min-height:100vh;display:flex;flex-direction:column;align-items:center}
+h1{font-size:clamp(20px, 6vw, 26px);font-weight:800;letter-spacing:-0.5px;margin-bottom:4px;text-align:center}
+.subtitle{color:var(--muted);font-size:clamp(12px, 3.5vw, 14px);margin-bottom:28px;text-align:center}
+.stepper{display:flex;align-items:center;gap:0;margin-bottom:32px;width:100%;max-width:400px;justify-content:center}
+.step{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.step-circle{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;transition:all .3s}
+.step-circle.pending{background:rgba(255,255,255,.06);color:var(--muted);border:1px solid rgba(255,255,255,.12)}
+.step-circle.active{background:var(--cyan);color:#000;box-shadow:0 0 16px var(--cyan)}
+.step-circle.done{background:var(--cyan);color:#000}
+.step-label{font-size:12px;font-weight:600}
+.step-label.active-label{color:var(--cyan)}
+.step-label.pending-label{color:var(--muted)}
+.step-line{flex:1;height:2px;background:rgba(255,255,255,.08);margin:0 6px;max-width:40px;transition:background .3s}
+.step-line.done{background:var(--cyan)}
+/* Combo illustration */
+.combo-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:clamp(16px, 4vw, 32px);display:flex;align-items:center;justify-content:center;gap:clamp(12px, 4vw, 32px);width:100%;max-width:520px;margin-bottom:28px}
+.combo-box{display:flex;flex-direction:column;align-items:center;gap:12px}
+.combo-face{width:clamp(60px, 20vw, 96px);height:clamp(80px, 25vw, 112px);border:2px dashed var(--cyan);border-radius:24px;display:flex;align-items:center;justify-content:center;background:rgba(0,196,204,.06);font-size:clamp(24px, 8vw, 40px);box-shadow:0 0 16px rgba(0,196,204,0.12)}
+.combo-doc{width:clamp(80px, 25vw, 128px);height:clamp(50px, 15vw, 84px);border:2px dashed var(--green);border-radius:14px;display:flex;align-items:center;justify-content:center;background:rgba(0,255,136,.06);font-size:clamp(20px, 6vw, 36px);box-shadow:0 0 16px rgba(0,255,136,0.1)}
+.combo-label{font-size:13px;font-weight:700}
+.label-cyan{color:var(--cyan)}
+.label-green{color:var(--green)}
+.plus{font-size:28px;color:var(--muted)}
+/* Camera */
+.camera-container{max-width:620px;display:none}
+.camera-frame{width:100%;height:clamp(320px, 64vh, 500px);background:#000;border-radius:20px;overflow:hidden;position:relative;border:1px solid var(--border);margin-bottom:20px}
+.camera-frame video{width:100%;height:100%;object-fit:cover}
+.hud-dual{position:absolute;inset:0;display:block;pointer-events:none}
+/* Oval for face */
+.face-oval{
+  width:clamp(120px, 30vw, 180px);
+  height:clamp(155px, 40vw, 235px);
+  border:2.5px solid white;
+  border-radius:50%;
+  transition:border-color .5s,box-shadow .5s;
+  position:absolute;
+  left:50%;
+  top:30%;
+  transform:translate(-50%,-50%);
+}
+.face-oval.locked{border-color:var(--cyan);box-shadow:0 0 14px var(--cyan)}
+/* Rectangle for doc */
+.doc-rect{
+  width:clamp(150px, 36vw, 230px);
+  height:clamp(95px, 22vw, 145px);
+  border:2.5px solid white;
+  border-radius:14px;
+  transition:border-color .5s,box-shadow .5s;
+  position:absolute;
+  left:50%;
+  top:78%;
+  transform:translate(-50%,-50%);
+}
+.doc-rect::before,.doc-rect::after{content:'';position:absolute;width:18px;height:18px;border-color:inherit;border-style:solid}
+.doc-rect::before{top:-2px;left:-2px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
+.doc-rect::after{bottom:-2px;right:-2px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
+.doc-rect.locked{border-color:var(--green);box-shadow:0 0 14px var(--green)}
+.hud-status{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.65);padding:8px 16px;border-radius:20px;white-space:nowrap}
+.hud-feedback{
+  position:absolute;
+  top:14px;
+  right:12px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  background:rgba(0,0,0,0.52);
+  border:1px solid rgba(255,255,255,0.18);
+  border-radius:10px;
+  padding:8px 10px;
+  font-size:12px;
+}
+.fb-item{display:flex;align-items:center;gap:6px;color:var(--muted);font-weight:600}
+.fb-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;box-shadow:0 0 6px rgba(245,158,11,0.5)}
+.fb-item.ok{color:#d1fae5}
+.fb-item.ok .fb-dot{background:var(--green);box-shadow:0 0 6px rgba(0,255,136,0.55)}
+.guide-label{
+  position:absolute;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:12px;
+  font-weight:700;
+  padding:6px 10px;
+  border-radius:999px;
+  background:rgba(0,0,0,0.55);
+  border:1px solid rgba(255,255,255,0.25);
+}
+.guide-label.face{top:10%; color:var(--cyan)}
+.guide-label.doc{top:61%; color:var(--green)}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#f59e0b;animation:blink 1s ease-in-out infinite}
+.status-dot.locked{background:var(--cyan);animation:none;box-shadow:0 0 8px var(--cyan)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.btn{padding:14px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:transparent;color:var(--text);font-weight:600;font-size:14px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;flex:1}
+.btn:hover{background:rgba(255,255,255,.05)}
+.btn-primary{border:none;background:var(--cyan);color:#000;animation:pulse-c 2.5s ease-in-out infinite;box-shadow:0 4px 12px rgba(0,196,204,0.3)}
+.btn-primary:hover{opacity:.9;animation:none;transform:translateY(-1px)}
+.btn-primary:disabled{opacity:.5;animation:none;cursor:not-allowed}
+.spinner{width:16px;height:16px;border:2px solid rgba(0,0,0,0.2);border-top-color:#000;border-radius:50%;animation:spin .8s linear infinite;margin-right:8px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse-c{0%,100%{box-shadow:0 0 0 0 rgba(0,196,204,0)}50%{box-shadow:0 0 0 8px rgba(0,196,204,0)}}
+.btn-row{display:flex;gap:12px;width:100%;max-width:500px}
+.error-box{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;color:#f87171;font-size:13px;margin-bottom:14px;display:none}
+.loading-overlay{position:fixed;inset:0;background:rgba(10,17,31,.9);display:none;align-items:center;justify-content:center;z-index:9999}
+.loading-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px 24px;text-align:center;min-width:220px}
+.loading-card .spinner{margin:0 auto 12px;display:block}
+.loading-title{font-weight:700;color:var(--cyan);margin-bottom:6px}
+.loading-sub{font-size:13px;color:var(--muted)}
+/* Success */
+.success-screen{display:none;max-width:620px}
+.success-card{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:48px 32px;text-align:center}
+.shield-wrap{position:relative;width:100px;height:100px;margin:0 auto 28px}
+.shield-svg{width:100px;height:100px;animation:pop-in .6s cubic-bezier(0.175,0.885,0.32,1.275) both}
+@keyframes pop-in{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
+.confetti-container{position:absolute;inset:-40px;pointer-events:none;overflow:visible}
+.confetti{position:absolute;width:7px;height:7px;border-radius:2px;animation:fall 2.5s ease-in-out infinite}
+@keyframes fall{0%{transform:translateY(-20px) rotate(0);opacity:1}100%{transform:translateY(100px) rotate(360deg);opacity:0}}
+</style>
+</head>
+<body>
+
+<div class="stepper">
+  <div class="step"><div class="step-circle active" id="s1">📋</div><span class="step-label active-label" id="sl1">Preparo</span></div>
+  <div class="step-line" id="l1"></div>
+  <div class="step"><div class="step-circle pending" id="s2">📷</div><span class="step-label pending-label" id="sl2">Captura</span></div>
+  <div class="step-line" id="l2"></div>
+  <div class="step"><div class="step-circle pending" id="s3">✅</div><span class="step-label pending-label" id="sl3">Resultado</span></div>
+</div>
+
+<!-- Step 1 -->
+<div id="step1">
+  <h1>Selfie com Documento</h1>
+  <p class="subtitle">Tire uma única foto segurando seu documento ao lado do rosto.</p>
+  <div class="combo-card">
+    <div class="combo-box"><div class="combo-face">👤</div><span class="combo-label label-cyan">Rosto</span></div>
+    <span class="plus">+</span>
+    <div class="combo-box"><div class="combo-doc">🪪</div><span class="combo-label label-green">Documento</span></div>
+  </div>
+  <button class="btn btn-primary" style="max-width:520px" onclick="goCamera()">Iniciar Captura</button>
+</div>
+
+<!-- Step 2: Camera -->
+<div id="step2" class="camera-container">
+  <h1>Posicione-se</h1>
+  <p class="subtitle">Rosto centralizado na parte de cima e documento abaixo, como no exemplo.</p>
+  <div class="camera-frame">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="analysisCanvas" style="display:none"></canvas>
+    <div class="hud-dual">
+      <div class="guide-label face">ROSTO</div>
+      <div class="face-oval" id="faceOval"></div>
+      <div class="guide-label doc">DOCUMENTO</div>
+      <div class="doc-rect" id="docRect"></div>
+    </div>
+    <div class="hud-feedback">
+      <div class="fb-item" id="faceState"><span class="fb-dot"></span>Rosto: ajustar</div>
+      <div class="fb-item" id="docState"><span class="fb-dot"></span>Documento: ajustar</div>
+    </div>
+    <div class="hud-status" id="hudStatus">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Buscando posição...</span>
+    </div>
+  </div>
+  <div id="errBox" class="error-box"></div>
+  <div class="btn-row">
+    <button class="btn" onclick="goBack()">Voltar</button>
+    <button class="btn btn-primary" id="btnCap" onclick="capture()" disabled>📸 Capturar Foto</button>
+  </div>
+</div>
+
+<!-- Success -->
+<div class="success-screen" id="successScreen">
+  <div class="success-card">
+    <div class="shield-wrap">
+      <svg class="shield-svg" viewBox="0 0 80 80" fill="none">
+        <circle cx="40" cy="40" r="36" fill="rgba(0,196,204,0.08)" stroke="#00C4CC" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <path d="M40 10L16 22v20c0 13 10 24.5 24 28 14-3.5 24-15 24-28V22L40 10z" fill="rgba(0,196,204,0.12)" stroke="#00C4CC" stroke-width="2"/>
+        <path d="M28 40l9 9 15-15" stroke="#00C4CC" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="confetti-container" id="confettiContainer"></div>
+    </div>
+    <h2 style="font-size:22px;font-weight:800;color:var(--cyan);margin-bottom:8px">Validação Completa!</h2>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:32px">Selfie e documento processados e salvos com segurança.</p>
+    <button class="btn btn-primary" style="max-width:220px;margin:0 auto" onclick="restart()">Nova Captura</button>
+  </div>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-card">
+    <span class="spinner"></span>
+    <div class="loading-title">Enviando captura</div>
+    <div class="loading-sub">Aguarde alguns segundos...</div>
+  </div>
+</div>
+
+<script src="valeris-sdk.js?v=2.6"></script>
+<script>
+const selfieDocParams = new URLSearchParams(window.location.search);
+ValerisSDK.init({
+  apiUrl: selfieDocParams.get('apiUrl') || '/api',
+  token: selfieDocParams.get('token') || 'portal-demo'
+});
+let stream;
+let alignLoop = null;
+let faceDetector = null;
+let faceCheckCooldown = false;
+let lastFaceCenter = null;
+let alignedSince = 0;
+let faceOk = false;
+let docOk = false;
+let poorCameraMode = false;
+let submitting = false;
+let reloadTimer = null;
+
+function setStep(n){
+  [1,2,3].forEach(i=>{
+    document.getElementById('s'+i).className='step-circle '+(i<n?'done':i===n?'active':'pending');
+    document.getElementById('sl'+i).className='step-label '+(i<=n?'active-label':'pending-label');
+    if(i<3)document.getElementById('l'+i).className='step-line'+(i<n?' done':'');
+  });
+}
+
+function showError(msg){const b=document.getElementById('errBox');b.textContent=msg;b.style.display='block';setTimeout(()=>b.style.display='none',7000);}
+function showLoading(){document.getElementById('loadingOverlay').style.display='flex';}
+function hideLoading(){document.getElementById('loadingOverlay').style.display='none';}
+function clearReloadTimer(){ if(reloadTimer){ clearTimeout(reloadTimer); reloadTimer = null; } }
+
+function setFeedback(faceAligned, docAligned){
+  const faceEl = document.getElementById('faceState');
+  const docEl = document.getElementById('docState');
+  faceEl.classList.toggle('ok', !!faceAligned);
+  docEl.classList.toggle('ok', !!docAligned);
+  faceEl.innerHTML = `<span class="fb-dot"></span>Rosto: ${faceAligned ? 'ok' : 'ajustar'}`;
+  docEl.innerHTML = `<span class="fb-dot"></span>Documento: ${docAligned ? 'ok' : 'ajustar'}`;
+}
+
+function getRelativeRect(guideEl, videoEl){
+  const g = guideEl.getBoundingClientRect();
+  const v = videoEl.getBoundingClientRect();
+  return {
+    x: (g.left - v.left) / v.width,
+    y: (g.top - v.top) / v.height,
+    w: g.width / v.width,
+    h: g.height / v.height
+  };
+}
+
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+function evaluateDocument(imgData, roi, lowQualityMode){
+  const { data, width, height } = imgData;
+  const x0 = clamp(Math.floor(roi.x * width), 0, width - 2);
+  const y0 = clamp(Math.floor(roi.y * height), 0, height - 2);
+  const rw = clamp(Math.floor(roi.w * width), 8, width - x0 - 1);
+  const rh = clamp(Math.floor(roi.h * height), 8, height - y0 - 1);
+  let edgeCount = 0, bright = 0, samples = 0, sqBright = 0, greenish = 0, skinLike = 0, darkPixels = 0, veryBrightPixels = 0, midTonePixels = 0;
+  for(let y = y0 + 1; y < y0 + rh - 1; y += 2){
+    for(let x = x0 + 1; x < x0 + rw - 1; x += 2){
+      const i = (y * width + x) * 4;
+      const r = data[i], g = data[i+1], b = data[i+2];
+      const gray = (r + g + b) / 3;
+      const ix = (y * width + (x - 1)) * 4;
+      const iy = ((y - 1) * width + x) * 4;
+      const gx = Math.abs(gray - ((data[ix] + data[ix+1] + data[ix+2]) / 3));
+      const gy = Math.abs(gray - ((data[iy] + data[iy+1] + data[iy+2]) / 3));
+      if (gx + gy > 26) edgeCount++;
+      if (g > r * 1.06 && g > b * 1.04 && (g - r) > 6) greenish++;
+      if (r > 60 && g > 35 && b > 20 && r > g && g > b && (r - b) > 15) skinLike++;
+      if (gray < 45) darkPixels++;
+      if (gray > 215) veryBrightPixels++;
+      if (gray >= 40 && gray <= 220) midTonePixels++;
+      bright += gray;
+      sqBright += gray * gray;
+      samples++;
+    }
+  }
+  const edgeDensity = edgeCount / Math.max(1, samples);
+  const avgBrightness = bright / Math.max(1, samples);
+  const variance = (sqBright / Math.max(1, samples)) - (avgBrightness * avgBrightness);
+  const stdDev = Math.sqrt(Math.max(0, variance));
+  const greenRatio = greenish / Math.max(1, samples);
+  const skinRatio = skinLike / Math.max(1, samples);
+  const darkRatio = darkPixels / Math.max(1, samples);
+  const brightRatio = veryBrightPixels / Math.max(1, samples);
+  const midToneRatio = midTonePixels / Math.max(1, samples);
+
+  // Document usually creates clear straight borders near ROI edges.
+  let borderStrong = 0, borderSamples = 0;
+  const stepBorder = 3;
+  const edgeThreshold = 34;
+  const yTop = clamp(y0 + 4, 0, height - 2);
+  const yBottom = clamp(y0 + rh - 5, 1, height - 1);
+  const xLeft = clamp(x0 + 4, 0, width - 2);
+  const xRight = clamp(x0 + rw - 5, 1, width - 1);
+  for (let x = x0 + 6; x < x0 + rw - 6; x += stepBorder) {
+    const iTopA = (yTop * width + x) * 4;
+    const iTopB = ((yTop + 1) * width + x) * 4;
+    const topA = (data[iTopA] + data[iTopA + 1] + data[iTopA + 2]) / 3;
+    const topB = (data[iTopB] + data[iTopB + 1] + data[iTopB + 2]) / 3;
+    if (Math.abs(topA - topB) > edgeThreshold) borderStrong++;
+    borderSamples++;
+
+    const iBotA = ((yBottom - 1) * width + x) * 4;
+    const iBotB = (yBottom * width + x) * 4;
+    const botA = (data[iBotA] + data[iBotA + 1] + data[iBotA + 2]) / 3;
+    const botB = (data[iBotB] + data[iBotB + 1] + data[iBotB + 2]) / 3;
+    if (Math.abs(botA - botB) > edgeThreshold) borderStrong++;
+    borderSamples++;
+  }
+  for (let y = y0 + 6; y < y0 + rh - 6; y += stepBorder) {
+    const iLeftA = (y * width + xLeft) * 4;
+    const iLeftB = (y * width + (xLeft + 1)) * 4;
+    const leftA = (data[iLeftA] + data[iLeftA + 1] + data[iLeftA + 2]) / 3;
+    const leftB = (data[iLeftB] + data[iLeftB + 1] + data[iLeftB + 2]) / 3;
+    if (Math.abs(leftA - leftB) > edgeThreshold) borderStrong++;
+    borderSamples++;
+
+    const iRightA = (y * width + (xRight - 1)) * 4;
+    const iRightB = (y * width + xRight) * 4;
+    const rightA = (data[iRightA] + data[iRightA + 1] + data[iRightA + 2]) / 3;
+    const rightB = (data[iRightB] + data[iRightB + 1] + data[iRightB + 2]) / 3;
+    if (Math.abs(rightA - rightB) > edgeThreshold) borderStrong++;
+    borderSamples++;
+  }
+  const borderEdgeRatio = borderStrong / Math.max(1, borderSamples);
+
+  // Reject when ROI is mostly skin/hand/face.
+  const likelyHandOrFace = skinRatio > 0.22;
+  const strictOk = edgeDensity > 0.17 && stdDev > 26 && avgBrightness > 55 && avgBrightness < 220 && darkRatio < 0.45 && brightRatio < 0.70 && midToneRatio > 0.42 && borderEdgeRatio > 0.11;
+  // In low quality cameras we still keep strict requirements to avoid "face-only" bypass.
+  const lowCamStrictOk = lowQualityMode && edgeDensity > 0.14 && stdDev > 22 && avgBrightness > 48 && avgBrightness < 228 && darkRatio < 0.52 && brightRatio < 0.78 && midToneRatio > 0.34 && borderEdgeRatio > 0.08;
+  const ok = !likelyHandOrFace && (strictOk || lowCamStrictOk);
+
+  const score = (edgeDensity * 0.50) + ((stdDev / 60) * 0.30) + ((avgBrightness > 35 && avgBrightness < 235 ? 1 : 0) * 0.12) + (greenRatio * 0.08);
+  return { ok, score, edgeDensity, stdDev, skinRatio, borderEdgeRatio };
+}
+
+async function evaluateFace(videoEl, faceRoi, imgData){
+  if (faceDetector && !faceCheckCooldown){
+    try{
+      faceCheckCooldown = true;
+      const faces = await faceDetector.detect(videoEl);
+      if (faces?.length){
+        const best = faces.sort((a,b)=>(b.boundingBox.width*b.boundingBox.height)-(a.boundingBox.width*a.boundingBox.height))[0];
+        const vb = videoEl.getBoundingClientRect();
+        const cx = (best.boundingBox.x + best.boundingBox.width / 2) / vb.width;
+        const cy = (best.boundingBox.y + best.boundingBox.height / 2) / vb.height;
+        const area = (best.boundingBox.width * best.boundingBox.height) / (vb.width * vb.height);
+        const inside = cx > faceRoi.x && cx < faceRoi.x + faceRoi.w && cy > faceRoi.y && cy < faceRoi.y + faceRoi.h;
+        const sizeOk = area > 0.03 && area < 0.32;
+        lastFaceCenter = { cx, cy };
+        setTimeout(()=>{ faceCheckCooldown = false; }, 260);
+        return inside && sizeOk;
+      }
+    }catch(e){}
+    setTimeout(()=>{ faceCheckCooldown = false; }, 260);
+  }
+  // Fallback heuristic when FaceDetector is unavailable.
+  const { data, width, height } = imgData;
+  const x0 = clamp(Math.floor(faceRoi.x * width), 0, width - 2);
+  const y0 = clamp(Math.floor(faceRoi.y * height), 0, height - 2);
+  const rw = clamp(Math.floor(faceRoi.w * width), 8, width - x0 - 1);
+  const rh = clamp(Math.floor(faceRoi.h * height), 8, height - y0 - 1);
+  let skinLike = 0, total = 0;
+  for(let y = y0; y < y0 + rh; y += 3){
+    for(let x = x0; x < x0 + rw; x += 3){
+      const i = (y * width + x) * 4;
+      const r = data[i], g = data[i+1], b = data[i+2];
+      if (r > 60 && g > 35 && b > 20 && r > g && g > b && (r - b) > 15) skinLike++;
+      total++;
+    }
+  }
+  return (skinLike / Math.max(1, total)) > 0.12;
+}
+
+async function goCamera(){
+  document.getElementById('step1').style.display='none';
+  document.getElementById('step2').style.display='block';
+  setStep(2);
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});
+    const video = document.getElementById('video');
+    video.srcObject=stream;
+    await video.play();
+    const track = stream.getVideoTracks()[0];
+    const settings = track ? track.getSettings() : {};
+    poorCameraMode = !!(settings && ((settings.width && settings.width <= 640) || (settings.frameRate && settings.frameRate <= 20)));
+    if ('FaceDetector' in window) {
+      try { faceDetector = new FaceDetector({ fastMode: true, maxDetectedFaces: 1 }); } catch(e) { faceDetector = null; }
+    }
+    startAlignmentLoop();
+  }catch(e){showError('Câmera indisponível: '+e.message);}
+}
+
+function startAlignmentLoop(){
+  stopAlignmentLoop();
+  alignedSince = 0;
+  faceOk = false;
+  docOk = false;
+  setFeedback(false, false);
+  const btn = document.getElementById('btnCap');
+  btn.disabled = true;
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('analysisCanvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const loop = async () => {
+    if (!video.srcObject || video.videoWidth < 2 || video.videoHeight < 2) {
+      alignLoop = requestAnimationFrame(loop);
+      return;
+    }
+    if (!poorCameraMode && video.videoWidth <= 720) {
+      poorCameraMode = true;
+    }
+
+    canvas.width = 320;
+    canvas.height = Math.max(180, Math.floor((video.videoHeight / video.videoWidth) * 320));
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const faceRoi = getRelativeRect(document.getElementById('faceOval'), video);
+    const docRoi = getRelativeRect(document.getElementById('docRect'), video);
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    faceOk = await evaluateFace(video, faceRoi, imgData);
+    const docEval = evaluateDocument(imgData, docRoi, poorCameraMode);
+    docOk = docEval.ok;
+
+    const fo=document.getElementById('faceOval');
+    const dr=document.getElementById('docRect');
+    const dot=document.getElementById('statusDot');
+    const txt=document.getElementById('statusText');
+
+    fo.classList.toggle('locked', faceOk);
+    dr.classList.toggle('locked', docOk);
+    setFeedback(faceOk, docOk);
+
+    if (faceOk && docOk) {
+      if (!alignedSince) alignedSince = Date.now();
+      const stableMs = Date.now() - alignedSince;
+      dot.className='status-dot locked';
+      if (stableMs < 900) {
+        txt.textContent='Mantenha parado...';
+        btn.disabled = true;
+      } else {
+        txt.textContent='✅ Alinhado! Pode capturar';
+        btn.disabled = false;
+      }
+    } else {
+      alignedSince = 0;
+      dot.className='status-dot';
+      btn.disabled = true;
+      if (!faceOk && !docOk) txt.textContent='Centralize rosto e documento';
+      else if (!faceOk) txt.textContent='Ajuste o rosto no oval azul';
+      else txt.textContent= poorCameraMode ? 'Documento obrigatório: aproxime e estabilize na caixa verde' : 'Documento obrigatório: aproxime na caixa verde';
+    }
+
+    alignLoop = requestAnimationFrame(loop);
+  };
+  alignLoop = requestAnimationFrame(loop);
+}
+
+function stopAlignmentLoop(){
+  if (alignLoop) {
+    cancelAnimationFrame(alignLoop);
+    alignLoop = null;
+  }
+}
+
+function goBack(){
+  clearReloadTimer();
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  stopAlignmentLoop();
+  submitting=false;
+  hideLoading();
+  document.getElementById('step1').style.display='block';
+  document.getElementById('step2').style.display='none';
+  setStep(1);
+}
+
+async function capture(){
+  if(submitting) return;
+  const v=document.getElementById('video');if(!v.srcObject)return;
+  if (!faceOk || !docOk || !alignedSince || (Date.now() - alignedSince) < 650) {
+    showError('Aguarde o status "Alinhado" para capturar com qualidade.');
+    return;
+  }
+  const c=document.createElement('canvas');c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+  c.getContext('2d').drawImage(v,0,0,c.width,c.height);
+  const dataUrl=c.toDataURL('image/jpeg',0.88);
+  v.srcObject.getTracks().forEach(t=>t.stop());
+  stopAlignmentLoop();
+  const btn=document.getElementById('btnCap');btn.innerHTML='<span class="spinner"></span> Enviando...';btn.disabled=true; submitting=true; showLoading();
+  const val=await ValerisSDK.validation.selfieWithDocument(dataUrl);
+  if(!val.isValid){showError('Falha: '+(val.reasons.join(', ')||'Ajuste a câmera'));btn.textContent='📸 Capturar Foto';btn.disabled=true;submitting=false;hideLoading();goCamera();return;}
+  try{
+    const geo=await ValerisSDK.getGeolocation();
+    const dev=await ValerisSDK.getDeviceInfo();
+    const meta={...geo,...dev,serviceType:'Selfie + Documento',confidence:val.confidence};
+    const composite=await ValerisSDK.generateComposite([{label:'Selfie com Documento',dataUrl}],meta);
+    await ValerisSDK.submitCapture('selfie-documento',composite,meta);
+    document.getElementById('step2').style.display='none';
+    document.getElementById('successScreen').style.display='block';
+    setStep(3); spawnConfetti();
+    clearReloadTimer();
+    reloadTimer = setTimeout(()=>{ window.location.reload(); }, 1800);
+  }catch(e){showError('Erro ao enviar: '+e.message);btn.textContent='📸 Capturar Foto';btn.disabled=true;goCamera();}
+  finally{ submitting=false; hideLoading(); }
+}
+
+function spawnConfetti(){
+  const c=document.getElementById('confettiContainer');c.innerHTML='';
+  for(let i=0;i<18;i++){const el=document.createElement('div');el.className='confetti';el.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*10}%;background:${'#00C4CC,#00FF88,#fff'.split(',')[i%3]};animation-delay:${Math.random()*1.5}s;animation-duration:${1.5+Math.random()}s`;c.appendChild(el);}
+}
+
+function restart(){clearReloadTimer();document.getElementById('step1').style.display='block';document.getElementById('successScreen').style.display='none';setStep(1);document.getElementById('btnCap').disabled=true;submitting=false;hideLoading();}
+</script>
+</body>
+</html>
