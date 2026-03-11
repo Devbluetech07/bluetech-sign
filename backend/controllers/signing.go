@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"context"
-	"crypto/sha256"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -265,6 +265,20 @@ func finalizeSignerIfReady(signer *models.Signer, tokenCode string, c *fiber.Ctx
 		return fiber.NewError(404, "Documento não encontrado")
 	}
 
+	if signer.AuthMethod == "email_token" {
+		providedCode := strings.TrimSpace(tokenCode)
+		expectedCode := strings.TrimSpace(signer.SignToken)
+		if expectedCode == "" || signer.SignTokenExpiresAt == nil {
+			return fiber.NewError(400, "Solicite um código de verificação antes de concluir")
+		}
+		if time.Now().After(*signer.SignTokenExpiresAt) {
+			return fiber.NewError(400, "Código de verificação expirado. Solicite um novo código")
+		}
+		if providedCode == "" || providedCode != expectedCode {
+			return fiber.NewError(400, "Código de verificação inválido")
+		}
+	}
+
 	if doc.SequentialFlow {
 		var blockers int64
 		config.DB.Model(&models.Signer{}).
@@ -303,6 +317,7 @@ func finalizeSignerIfReady(signer *models.Signer, tokenCode string, c *fiber.Ctx
 	signer.SignedIP = c.IP()
 	signer.SignedUserAgent = c.Get("User-Agent")
 	signer.SignToken = ""
+	signer.SignTokenExpiresAt = nil
 	if err := config.DB.Save(signer).Error; err != nil {
 		return fiber.NewError(500, "Falha ao concluir assinatura")
 	}
@@ -370,12 +385,24 @@ func SignDocumentField(c *fiber.Ctx) error {
 
 	// Upload signature image to MinIO if provided
 	if req.Image != "" {
-		idx := strings.Index(req.Image, ";base64,")
+		rawImage := strings.TrimSpace(req.Image)
+		if strings.HasPrefix(rawImage, "valeris_capture:") {
+			captureIDStr := strings.TrimPrefix(rawImage, "valeris_capture:")
+			captureID, parseErr := uuid.Parse(strings.TrimSpace(captureIDStr))
+			if parseErr == nil {
+				var capture models.ValerisCapture
+				if err := config.DB.Where("id = ?", captureID).First(&capture).Error; err == nil {
+					rawImage = strings.TrimSpace(capture.ImageData)
+				}
+			}
+		}
+
+		idx := strings.Index(rawImage, ";base64,")
 		var b64Data string
 		if idx != -1 {
-			b64Data = req.Image[idx+8:]
+			b64Data = rawImage[idx+8:]
 		} else {
-			b64Data = req.Image
+			b64Data = rawImage
 		}
 		imgBuffer, err := base64.StdEncoding.DecodeString(b64Data)
 		if err == nil {
@@ -597,14 +624,14 @@ func gerarDocumentoFinal(documentID uuid.UUID) (string, string, string, error) {
 	_ = config.DB.Where("document_id = ?", documentID).Order("created_at asc").Find(&signatures).Error
 
 	evidencePayload := map[string]any{
-		"document_id":       documentID.String(),
-		"gerado_em":         time.Now().UTC().Format(time.RFC3339),
-		"arquivo_original":  doc.FileKey,
-		"signatarios":       signers,
-		"campos":            fields,
-		"validacoes":        validations,
-		"assinaturas":       signatures,
-		"observacao":        "Evidências geradas automaticamente no fechamento da assinatura.",
+		"document_id":        documentID.String(),
+		"gerado_em":          time.Now().UTC().Format(time.RFC3339),
+		"arquivo_original":   doc.FileKey,
+		"signatarios":        signers,
+		"campos":             fields,
+		"validacoes":         validations,
+		"assinaturas":        signatures,
+		"observacao":         "Evidências geradas automaticamente no fechamento da assinatura.",
 		"algoritmo_assinato": "SHA-256",
 	}
 	evidenceBytes, _ := json.MarshalIndent(evidencePayload, "", "  ")

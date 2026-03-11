@@ -50,6 +50,14 @@ final GoRouter _router = GoRouter(
         return PublicSigningPage(token: token);
       },
     ),
+    GoRoute(
+      path: '/assinatura/:token',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) {
+        final token = state.pathParameters['token']!;
+        return PublicSigningPage(token: token);
+      },
+    ),
     GoRoute(path: '/admin/:rest(.*)', redirect: (context, state) => '/login'),
     ShellRoute(
       navigatorKey: _shellNavigatorKey,
